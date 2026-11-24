@@ -140,7 +140,23 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     if (res?.code !== 1) return { status: "pending" };
     const session = sessionFromLogin(res.data);
     if (!session) throw providerError("MovieBox Pro approved the code but returned no session.", 502);
+    await registerDevice(c, session).catch(() => null);
     return { status: "approved", session };
+  }
+
+  // Register TesPlay as a device on the account, exactly as the MovieBox Pro
+  // Android app does after a code login (LoginCodeShowDialog.bindDevice).
+  // MovieBox Pro only returns stream links to registered devices.
+  function registerDevice(c, session) {
+    return call(c, "Device_v2", {
+      firebase_token: "",
+      device_name: "android",
+      device_model: "TesPlay",
+      devicetoken: "",
+      udid: "",
+      start_time: String(Math.floor(Date.now() / 1000)),
+      receive: "1",
+    }, { session });
   }
 
   // Renew a session that is close to expiring (User_token).
@@ -151,7 +167,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     return renewed ? { ...renewed, user: { ...session.user, ...Object.fromEntries(Object.entries(renewed.user).filter(([, v]) => v)) } } : null;
   }
 
-  return { call, startCodeLogin, pollCodeLogin, refreshSession };
+  return { call, startCodeLogin, pollCodeLogin, refreshSession, registerDevice };
 }
 
 // ---- catalogue mapping ------------------------------------------------------
@@ -388,6 +404,18 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
       const reply = await request(label, extra);
       if (!res || (res.code !== 1 && reply?.code === 1)) res = reply;
       if (playable(reply)) { res = reply; break; }
+    }
+    // Links are only handed to registered devices: register and ask again.
+    if (!playable(res)) {
+      const bind = await client.registerDevice(c, session).catch((e) => ({ code: "err", msg: e.message }));
+      tried.push(`bind:${bind?.code}/${String(bind?.msg || "").slice(0, 40)}`);
+      if (bind?.code === 1) {
+        for (const [label, extra] of shapes) {
+          const reply = await request(`${label}+bound`, extra);
+          if (playable(reply)) { res = reply; break; }
+          if (res?.code !== 1 && reply?.code === 1) res = reply;
+        }
+      }
     }
     if (res?.code !== 1) throw providerError(`${res?.msg || "MovieBox Pro could not load streams for this title."} [${tried.join(" ")}]`, 502);
     res.tried = tried.join(" ");

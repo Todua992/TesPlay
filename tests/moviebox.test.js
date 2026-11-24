@@ -78,7 +78,7 @@ test("session helpers decode the JWT and pick the session out of a login respons
   assert.match(openUdidFor({ id: "a" }), /^[0-9a-f]{32}$/);
 });
 
-test("code login: get a code, stay pending until approved", async () => {
+test("code login: get a code, stay pending until approved, then register the device", async () => {
   const token = jwt(7, "devtok", inDays(30));
   let polls = 0;
   const api = fakeApi({
@@ -90,6 +90,17 @@ test("code login: get a code, stay pending until approved", async () => {
       polls += 1;
       return polls < 2 ? { code: 0, msg: "waiting" } : { code: 1, data: { uid_v2: token, username: "luka", isvip: 1 } };
     },
+    Device_v2: (p) => {
+      assert.equal(p.uid, token);
+      assert.equal(p.open_udid, openUdidFor(conn()));
+      assert.equal(p.appid, "com.movieboxpro.android");
+      assert.equal(p.app_version, "15.5");
+      assert.equal(p.device_name, "android");
+      assert.equal(p.receive, "1");
+      for (const k of ["firebase_token", "devicetoken", "udid"]) assert.equal(p[k], "");
+      assert.match(p.start_time, /^\d{10}$/);
+      return { code: 1 };
+    },
   });
   const client = createMovieBoxClient({ fetchImpl: api.fetchImpl });
   assert.deepEqual(await client.startCodeLogin(conn()), { code: "AB12CD34" });
@@ -98,7 +109,7 @@ test("code login: get a code, stay pending until approved", async () => {
   assert.equal(approved.status, "approved");
   assert.equal(approved.session.uid, token);
   assert.equal(approved.session.user.vip, true);
-  assert.deepEqual(api.calls.map((c) => c.module), ["Add_captcha", "Login_captcha_v2", "Login_captcha_v2"]);
+  assert.deepEqual(api.calls.map((c) => c.module), ["Add_captcha", "Login_captcha_v2", "Login_captcha_v2", "Device_v2"]);
 });
 
 test("code login reports a full device list and rejects malformed codes", async () => {
@@ -268,16 +279,18 @@ test("an empty stream list tries each server group and explains what came back",
   const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
   const { svc, calls } = service({
     Movie_downloadurl_v3: () => ({ code: 1, msg: "success", data: { seconds: 0, quality: ["4K", "1080p"], ip: "x", list: [] } }),
+    Device_v2: () => ({ code: 1, msg: "ok" }),
   });
   await assert.rejects(svc.resolvePlayback({}, signedIn, "11", "movie"), (e) => {
     assert.equal(e.status, 404);
     assert.match(e.message, /list=0 withPath=0 vip=0/);
     assert.match(e.message, /quality=\["4K","1080p"\]/);
-    assert.match(e.message, /tried=auto:1\/0 empty:1\/0 none:1\/0/);
+    assert.match(e.message, /tried=auto:1\/0 empty:1\/0 none:1\/0 bind:1\/ok auto\+bound:1\/0 empty\+bound:1\/0 none\+bound:1\/0/);
     return true;
   });
   const tries = calls.filter((c) => c.module === "Movie_downloadurl_v3");
-  assert.deepEqual(tries.map((c) => [c.oss, c.group]), [["1", "AUTO"], ["1", ""], [undefined, undefined]]);
+  assert.deepEqual(tries.slice(0, 3).map((c) => [c.oss, c.group]), [["1", "AUTO"], ["1", ""], [undefined, undefined]]);
+  assert.equal(tries.length, 6);
   assert.ok(tries.every((c) => c.uid === token));
 });
 
@@ -291,4 +304,18 @@ test("stream lookup stops at the first server group that returns links", async (
   await svc.resolvePlayback({}, signedIn, "11", "movie");
   assert.equal(calls.filter((c) => c.module === "Movie_downloadurl_v3").length, 2);
   assert.equal(registered[0].url, "https://cdn/m.mp4");
+});
+
+test("streams appear once the device is registered", async () => {
+  const token = jwt(9, "tok9", inDays(30));
+  const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
+  let bound = false;
+  const { svc, registered, calls } = service({
+    Movie_downloadurl_v3: () => ({ code: 1, data: { list: bound ? [{ fid: 3, real_quality: "1080p", path: "https://cdn/m.mp4" }] : [] } }),
+    Device_v2: () => ((bound = true), { code: 1 }),
+    Movie_srt_list_v3: () => ({ code: 1, data: { list: [] } }),
+  });
+  await svc.resolvePlayback({}, signedIn, "11", "movie");
+  assert.equal(registered[0].url, "https://cdn/m.mp4");
+  assert.equal(calls.filter((c) => c.module === "Device_v2").length, 1);
 });
