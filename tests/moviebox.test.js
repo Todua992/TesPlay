@@ -273,8 +273,29 @@ test("an empty stream list explains what MovieBox Pro returned without exposing 
   await assert.rejects(svc.resolvePlayback({}, signedIn, "11", "movie"), (e) => {
     assert.equal(e.status, 404);
     assert.match(e.message, /list=2 withPath=0 vip=1/);
+    assert.match(e.message, /tried=app:1\/2 app\+token:1\/2 bare\+token:1\/2 bare:1\/2/);
     return true;
   });
-  assert.equal(calls.filter((c) => c.module === "Movie_downloadurl_v3").length, 2, "retries with the session device id");
-  assert.equal(calls[1].open_udid, "tok9");
+  const tries = calls.filter((c) => c.module === "Movie_downloadurl_v3");
+  assert.equal(tries.length, 4);
+  assert.equal(tries[1].open_udid, "tok9");
+  assert.equal(tries[2].open_udid, "tok9");
+  assert.equal(tries[2].appid, undefined, "bare attempt sends no app fields");
+  assert.equal(tries[2].oss, undefined);
+  assert.equal(tries[2].uid, token);
+  assert.equal(tries[3].open_udid, openUdidFor(signedIn));
+});
+
+test("stream lookup stops at the first request shape that returns a playable link", async () => {
+  const token = jwt(9, "tok9", inDays(30));
+  const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
+  const { svc, calls, registered } = service({
+    Movie_downloadurl_v3: (p) => (p.appid === undefined
+      ? { code: 1, data: { list: [{ fid: 3, real_quality: "1080p", path: "https://cdn/bare.mp4" }] } }
+      : { code: 1, data: { list: [] } }),
+    Movie_srt_list_v3: () => ({ code: 1, data: { list: [] } }),
+  });
+  await svc.resolvePlayback({}, signedIn, "11", "movie");
+  assert.equal(calls.filter((c) => c.module === "Movie_downloadurl_v3").length, 3);
+  assert.equal(registered[0].url, "https://cdn/bare.mp4");
 });

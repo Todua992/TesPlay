@@ -80,8 +80,15 @@ export function sessionFromLogin(data) {
 export function createMovieBoxClient({ fetchImpl } = {}) {
   const doFetch = fetchImpl || globalThis.fetch;
 
-  async function call(c, module, params = {}, { session = sessionOf(c), timeout = 20000 } = {}) {
-    const payload = {
+  // `bare` sends only module + params + uid + expiry (the shape the public
+  // mbp-stremio client uses for download URLs), with form appid 28.
+  async function call(c, module, params = {}, { session = sessionOf(c), timeout = 20000, bare = false } = {}) {
+    const payload = bare ? {
+      expired_date: Math.floor(Date.now() / 1000) + 3600,
+      ...(session ? { uid: session.uid } : {}),
+      module,
+      ...params,
+    } : {
       childmode: "0",
       app_version: APP_VERSION,
       appid: APP_ID,
@@ -94,7 +101,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       module,
       ...params,
     };
-    const body = new URLSearchParams({ data: encodeRequest(payload), appid: "27", platform: "android" });
+    const body = new URLSearchParams(bare ? { data: encodeRequest(payload), appid: "28" } : { data: encodeRequest(payload), appid: "27", platform: "android" });
     let response;
     try {
       response = await doFetch(API_URL, {
@@ -236,7 +243,8 @@ function noStreamError(all, res) {
   let host = "";
   try { host = new URL(all.find((s) => /^https?:\/\//i.test(String(s?.path || "")))?.path || "").host; } catch { /* no usable link */ }
   const keys = all[0] && typeof all[0] === "object" ? Object.keys(all[0]).slice(0, 12).join(",") : "";
-  const detail = `[code=${res?.code} msg=${String(res?.msg || "").slice(0, 60)} list=${all.length} withPath=${withPath} vip=${vip}${host ? ` host=${host}` : ""}${keys ? ` fields=${keys}` : ""}]`;
+  const dataKeys = res?.data && typeof res.data === "object" && !Array.isArray(res.data) ? Object.keys(res.data).slice(0, 12).join(",") : "";
+  const detail = `[code=${res?.code} msg=${String(res?.msg || "").slice(0, 60)} list=${all.length} withPath=${withPath} vip=${vip}${host ? ` host=${host}` : ""}${keys ? ` fields=${keys}` : ""}${dataKeys ? ` data=${dataKeys}` : ""}${res?.tried ? ` tried=${res.tried}` : ""}]`;
   const message = vip && vip === all.length ? "This title needs a MovieBox Pro VIP account." : "MovieBox Pro has no playable stream for this title yet.";
   return providerError(`${message} ${detail}`, 404);
 }
@@ -370,14 +378,29 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
     const params = isSeries
       ? { tid: parsed.id, season: String(parsed.season || 1), episode: String(parsed.episode || 1) }
       : { mid: parsed.id };
-    let res = await client.call(c, module, { ...params, oss: "1", group: "" }, { session });
     const tokenUdid = decodeSessionToken(session.uid)?.token;
-    // Some accounts only get real links when the device id is the session token.
-    if ((res?.code !== 1 || !rankStreams(listOf(res.data)).length) && tokenUdid) {
-      const retry = await client.call(c, module, { ...params, oss: "1", group: "", open_udid: tokenUdid }, { session });
-      if (retry?.code === 1 && (res?.code !== 1 || rankStreams(listOf(retry.data)).length)) res = retry;
+    // Request shapes, most likely first. MovieBox Pro can answer "success"
+    // with an empty list when it doesn't like the shape, so try the next one
+    // until one returns a playable link, and remember what each returned.
+    const attempts = [
+      ["app", { ...params, oss: "1", group: "" }, {}],
+      ...(tokenUdid ? [
+        ["app+token", { ...params, oss: "1", group: "", open_udid: tokenUdid }, {}],
+        ["bare+token", { ...params, open_udid: tokenUdid }, { bare: true }],
+      ] : []),
+      ["bare", { ...params, open_udid: openUdidFor(c) }, { bare: true }],
+    ];
+    let res = null;
+    const tried = [];
+    for (const [label, body, options] of attempts) {
+      const reply = await client.call(c, module, body, { session, ...options }).catch((e) => ({ code: "err", msg: e.message }));
+      const list = listOf(reply?.data);
+      tried.push(`${label}:${reply?.code}/${list.length}`);
+      if (!res || (res.code !== 1 && reply?.code === 1)) res = reply;
+      if (reply?.code === 1 && rankStreams(list).length) { res = reply; break; }
     }
-    if (res?.code !== 1) throw providerError(res?.msg || "MovieBox Pro could not load streams for this title.", 502);
+    res.tried = tried.join(" ");
+    if (res?.code !== 1) throw providerError(`${res?.msg || "MovieBox Pro could not load streams for this title."} [${res.tried}]`, 502);
     return { session, res, all: listOf(res.data), ranked: rankStreams(listOf(res.data)) };
   }
 
