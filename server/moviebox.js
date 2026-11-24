@@ -39,6 +39,15 @@ const TRAP_MARKERS = [
 
 const guestSessions = new Map();
 
+// MovieBox rate-limits verification codes per device (5/day). A single shared
+// device id made every connection share one quota; derive a stable id per
+// connection instead (an explicit config.deviceId still wins).
+function deviceIdFor(c) {
+  if (c?.config?.deviceId) return c.config.deviceId;
+  const n = parseInt(createHash("md5").update(String(c?.id || "tesplay")).digest("hex").slice(0, 8), 16);
+  return `86820305${String(1000000 + (n % 9000000))}`;
+}
+
 export function md5Hex(data) {
   return createHash("md5").update(String(data || ""), "utf8").digest("hex");
 }
@@ -194,7 +203,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       return {
         token: c.config.token,
         userId: c.config.userId || "",
-        deviceId: c.config.deviceId || "868203051234567",
+        deviceId: deviceIdFor(c),
       };
     }
     let cached = guestSessions.get(c.id);
@@ -202,7 +211,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       cached = {
         token: "",
         userId: "",
-        deviceId: c.config?.deviceId || "868203051234567",
+        deviceId: deviceIdFor(c),
         bootstrapped: false,
       };
       guestSessions.set(c.id, cached);
@@ -360,36 +369,45 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
   // passwordless token endpoint: check-sms-code only validates, and /login
   // always requires a password. So we use the password-reset flow: send a
   // reset code, set a MovieBox password with it, then log in with that password.
-  // Step 1: ask MovieBox to send a reset code to the account.
+  // Step 1: ask MovieBox to send a reset code to the account. This API version
+  // accepts message types 1 (register) and 2 (login) and rejects 3; the reset
+  // type is most likely 4. Try 4, fall back to 2 only on "Invalid message type",
+  // and return the type used so step 2 sends the matching type.
+  const CODE_TYPES = [4, 2];
   async function requestLoginCode(c, account) {
     const trimmed = String(account || "").trim();
     if (!trimmed) throw providerError("Enter your MovieBox email or phone.");
     const isEmail = trimmed.includes("@");
-    const payload = {
-      package_name: "com.community.oneroom",
-      authType: isEmail ? 1 : 0,
-      type: 3, // 1 = Register, 2 = Login, 3 = Reset password
-      ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
-    };
-    const res = await request(c, "POST", "/wefeed-mobile-bff/user-api/get-sms-code", { data: payload });
-    if (![0, 200].includes(res?.code)) {
-      throw providerError(res?.msg || res?.message || "MovieBox could not send a verification code. Check the email or phone and try again.", 400);
+    let last = null;
+    for (const type of CODE_TYPES) {
+      const res = await request(c, "POST", "/wefeed-mobile-bff/user-api/get-sms-code", {
+        data: {
+          package_name: "com.community.oneroom",
+          authType: isEmail ? 1 : 0,
+          type,
+          ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
+        },
+      });
+      if ([0, 200].includes(res?.code)) return { sent: true, channel: isEmail ? "email" : "phone", type };
+      last = res;
+      if (!/invalid message type/i.test(String(res?.msg || res?.message || ""))) break;
     }
-    return { sent: true, channel: isEmail ? "email" : "phone" };
+    throw providerError(last?.msg || last?.message || "MovieBox could not send a verification code. Check the email or phone and try again.", 400);
   }
 
   // Step 2: set the MovieBox password with the reset code, then log in with it.
-  async function verifyLoginCode(c, account, code, password) {
+  async function verifyLoginCode(c, account, code, password, codeType) {
     const trimmed = String(account || "").trim();
     const otp = String(code || "").trim();
     if (!trimmed || !otp) throw providerError("Enter your MovieBox email/phone and the verification code.");
     if (!password || String(password).length < 6) throw providerError("Choose a MovieBox password of at least 6 characters.");
     const isEmail = trimmed.includes("@");
+    const type = CODE_TYPES.includes(Number(codeType)) ? Number(codeType) : CODE_TYPES[0];
     const reset = await request(c, "POST", "/wefeed-mobile-bff/user-api/reset-password", {
       data: {
         package_name: "com.community.oneroom",
         authType: isEmail ? 1 : 0,
-        type: 3,
+        type,
         verificationCode: otp,
         password: md5Hex(password),
         ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
@@ -865,9 +883,9 @@ export function registerMovieBoxRoutes(app, { ctx, connection, route, art, media
 
   app.post("/api/moviebox/:connectionId/login", ctx.requireConnectionManager || ((_r, _s, n) => n()), route(async (req, res) => {
     const c = connection(req, req.params.connectionId, "moviebox");
-    const { account, code, password } = req.body || {};
+    const { account, code, password, codeType } = req.body || {};
     const auth = code
-      ? await client.verifyLoginCode(c, account, code, password)
+      ? await client.verifyLoginCode(c, account, code, password, codeType)
       : await client.loginAccount(c, account, password);
     const updated = ctx.saveConnection(req, {
       id: c.id,

@@ -60,6 +60,7 @@ export default function MovieBoxHub({
   const [loginCode, setLoginCode] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [codeType, setCodeType] = useState<number | undefined>(undefined);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
 
@@ -170,7 +171,8 @@ export default function MovieBoxHub({
     setLoginBusy(true);
     setLoginError('');
     try {
-      await api(`/moviebox/${c.id}/request-code`, { account: loginAccount.trim() });
+      const sent = await api<{ type?: number }>(`/moviebox/${c.id}/request-code`, { account: loginAccount.trim() });
+      setCodeType(sent?.type);
       setCodeSent(true);
     } catch (err) {
       setLoginError(errorMessage(err));
@@ -185,7 +187,7 @@ export default function MovieBoxHub({
     setLoginBusy(true);
     setLoginError('');
     try {
-      await api(`/moviebox/${c.id}/login`, { account: loginAccount.trim(), code: loginCode.trim(), password: loginPassword });
+      await api(`/moviebox/${c.id}/login`, { account: loginAccount.trim(), code: loginCode.trim(), password: loginPassword, codeType });
       setLoginCode('');
       setLoginPassword('');
       setCodeSent(false);
