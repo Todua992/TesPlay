@@ -31,7 +31,7 @@ const descriptions = {
   local: "Local & mounted network files",
   stremio: 'Your Stremio addons, movies & series',
   youtube: "YouTube videos & channels",
-  moviebox: "Movies, series & anime",
+  moviebox: "Movies & TV series",
 };
 const itemKey = (item) =>
   `${item.connectionId ?? "public"}:${item.type}:${item.id}`;
@@ -149,10 +149,11 @@ export function createStore({ dataDir = resolve("data"), encryptionKey } = {}) {
     }
     if (row.type === "moviebox") {
       const config = decryptJSON(row.encrypted_config, key, `${row.user_id}:${row.id}`);
-      authorization = {
-        authMode: config.token ? "account" : "guest",
-        ...(config.account ? { summary: `Signed in as ${config.userInfo?.nickname || config.account}` } : { summary: "Guest access" }),
-      };
+      const session = config.session && typeof config.session.uid === "string" ? config.session : null;
+      const who = session?.user?.name || "your MovieBox Pro account";
+      authorization = session
+        ? { authMode: "account", summary: `Signed in as ${who}${session.user?.vip ? " · VIP" : ""}` }
+        : { authMode: "guest", summary: "Not signed in" };
     }
     if (row.type === "youtube") {
       const config = decryptJSON(

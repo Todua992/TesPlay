@@ -53,10 +53,10 @@ export const services = [
   {
     id: "moviebox",
     name: "MovieBox Pro",
-    subtitle: "Movies, series & anime",
+    subtitle: "Movies & TV series",
     color: "#10b981",
     letters: "M",
     description:
-      "Stream movies, TV series and anime with instant guest access or your MovieBox account.",
+      "Stream movies and TV series from your MovieBox Pro account. Sign in by approving a code on movieboxpro.app.",
   },
 ];

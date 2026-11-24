@@ -217,7 +217,7 @@ export default function ConnectionEditor({ adding, editing, editConfig, configur
           )}
           {adding === "moviebox" && (
             <p className="form-help">
-              Guest access works immediately without an account. Save to start browsing movies, series, and anime right away.
+              Save, then open MovieBox Pro and sign in by approving a code on movieboxpro.app. Browsing works right away; playing titles needs your account.
             </p>
           )}
           {editing && (

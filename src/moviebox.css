@@ -130,3 +130,19 @@
   .mb-brand span:last-child { display: none; }
   .mb-account-pill span:last-child { display: none; }
 }
+
+/* Device-pairing sign-in: the code the user types on movieboxpro.app. */
+.mb-pair { display: grid; gap: 12px; }
+.mb-pair-code {
+  display: block;
+  padding: 16px 12px;
+  border: 1px solid var(--border, color-mix(in srgb, var(--text) 18%, transparent));
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: 700 clamp(28px, 7vw, 40px) / 1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.18em;
+  text-align: center;
+  user-select: all;
+}
+.mb-pair .form-actions a.button { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }

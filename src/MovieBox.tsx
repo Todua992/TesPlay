@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowRight, Clapperboard, Flame, Film, Layers, Search, Sparkles, Trophy, UserRound, X } from 'lucide-react';
+import { ArrowRight, Clapperboard, ExternalLink, Film, Layers, Search, Sparkles, UserRound, X } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { Busy, Card, Empty, Modal, Row } from './components';
 import type { Connection, Library, MediaItem } from './types';
 import { itemKey } from './types';
 import './moviebox.css';
 
-type Tab = 'discover' | 'movies' | 'series' | 'anime' | 'rankings' | 'search';
+type Tab = 'discover' | 'movies' | 'series' | 'search';
 type Shelf = { id: string; title: string; items: MediaItem[]; tab?: Tab };
 type DiscoverResponse = { shelves: Shelf[]; suggestions?: string[] };
 type BrowseResponse = { items: MediaItem[]; hasMore?: boolean };
@@ -16,9 +16,10 @@ const tabs: readonly [Exclude<Tab, 'search'>, string, typeof Sparkles][] = [
   ['discover', 'Discover', Sparkles],
   ['movies', 'Movies', Clapperboard],
   ['series', 'TV Series', Layers],
-  ['anime', 'Anime', Flame],
-  ['rankings', 'Rankings', Trophy],
 ];
+
+// Pairing codes are only valid for a while; stop polling after this.
+const PAIR_TIMEOUT_MS = 10 * 60 * 1000;
 
 export default function MovieBoxHub({
   connections,
@@ -56,11 +57,9 @@ export default function MovieBoxHub({
   const [enabling, setEnabling] = useState(false);
 
   const [accountModal, setAccountModal] = useState(false);
-  const [loginAccount, setLoginAccount] = useState('');
-  const [loginCode, setLoginCode] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
-  const [codeType, setCodeType] = useState<number | undefined>(undefined);
+  const [pairCode, setPairCode] = useState('');
+  const [pairApproveUrl, setPairApproveUrl] = useState('https://www.movieboxpro.app');
+  const [pairExpired, setPairExpired] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
 
@@ -152,12 +151,13 @@ export default function MovieBoxHub({
     setTab(returnTab);
   };
 
-  async function enableGuestMovieBox() {
+  async function enableMovieBox() {
     setEnabling(true);
     setError('');
     try {
-      await api('/connections', { type: 'moviebox', name: 'MovieBox Pro', config: { authMode: 'guest' } });
+      await api('/connections', { type: 'moviebox', name: 'MovieBox Pro', config: {} });
       await onReloadConnections();
+      setAccountModal(true);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -165,34 +165,15 @@ export default function MovieBoxHub({
     }
   }
 
-  async function sendLoginCode(e: FormEvent) {
-    e.preventDefault();
-    if (!c || !loginAccount.trim()) return;
-    setLoginBusy(true);
-    setLoginError('');
-    try {
-      const sent = await api<{ type?: number }>(`/moviebox/${c.id}/request-code`, { account: loginAccount.trim() });
-      setCodeType(sent?.type);
-      setCodeSent(true);
-    } catch (err) {
-      setLoginError(errorMessage(err));
-    } finally {
-      setLoginBusy(false);
-    }
-  }
-
-  async function submitAccountLogin(e: FormEvent) {
-    e.preventDefault();
+  async function startPairing() {
     if (!c) return;
     setLoginBusy(true);
     setLoginError('');
+    setPairExpired(false);
     try {
-      await api(`/moviebox/${c.id}/login`, { account: loginAccount.trim(), code: loginCode.trim(), password: loginPassword, codeType });
-      setLoginCode('');
-      setLoginPassword('');
-      setCodeSent(false);
-      await onReloadConnections();
-      setAccountModal(false);
+      const res = await api<{ code: string; approveUrl?: string }>(`/moviebox/${c.id}/login/start`, {});
+      setPairCode(res.code);
+      if (res.approveUrl) setPairApproveUrl(res.approveUrl);
     } catch (err) {
       setLoginError(errorMessage(err));
     } finally {
@@ -200,7 +181,44 @@ export default function MovieBoxHub({
     }
   }
 
-  async function switchToGuest() {
+  // Poll every 3 s while a code is shown, until approved, failed or expired.
+  useEffect(() => {
+    if (!c || !accountModal || !pairCode) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const startedAt = Date.now();
+    const poll = async () => {
+      if (stopped) return;
+      if (Date.now() - startedAt > PAIR_TIMEOUT_MS) {
+        setPairExpired(true);
+        setPairCode('');
+        return;
+      }
+      try {
+        const res = await api<{ status: 'pending' | 'approved' }>(`/moviebox/${c.id}/login/poll`, { code: pairCode });
+        if (stopped) return;
+        if (res.status === 'approved') {
+          setPairCode('');
+          await onReloadConnections();
+          setAccountModal(false);
+          return;
+        }
+      } catch (err) {
+        if (stopped) return;
+        setLoginError(errorMessage(err));
+        setPairCode('');
+        return;
+      }
+      timer = setTimeout(() => void poll(), 3000);
+    };
+    timer = setTimeout(() => void poll(), 3000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [c?.id, accountModal, pairCode]);
+
+  async function signOut() {
     if (!c) return;
     setLoginBusy(true);
     setLoginError('');
@@ -224,13 +242,13 @@ export default function MovieBoxHub({
           </div>
           <h2>MovieBox Pro</h2>
           <p>
-            Stream movies, TV series, and anime with subtitles and quality selection right inside TesPlay.
-            {canManage ? ' Start immediately with instant guest access or sign in with your account.' : ' Ask your server owner to enable MovieBox Pro.'}
+            Stream movies and TV series from your MovieBox Pro account, with subtitles and quality selection, right inside TesPlay.
+            {canManage ? ' Enable it, then sign in by approving a code on movieboxpro.app.' : ' Ask your server owner to enable MovieBox Pro.'}
           </p>
           {error && <p className="form-error" role="alert">{error}</p>}
           {canManage && (
             <div className="mb-setup-actions">
-              <button className="button primary" disabled={enabling} onClick={() => void enableGuestMovieBox()}>
+              <button className="button primary" disabled={enabling} onClick={() => void enableMovieBox()}>
                 <Film size={17} />
                 {enabling ? 'Enabling…' : 'Enable MovieBox Pro'}
               </button>
@@ -255,7 +273,7 @@ export default function MovieBoxHub({
           <Search size={19} aria-hidden="true" />
           <input
             aria-label="Search MovieBox Pro"
-            placeholder="Search movies, TV series, anime…"
+            placeholder="Search movies and TV series…"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             enterKeyHint="search"
@@ -292,16 +310,15 @@ export default function MovieBoxHub({
             className="mb-account-pill"
             onClick={() => {
               setLoginError('');
-              setLoginCode('');
-              setLoginPassword('');
-              setCodeSent(false);
+              setPairCode('');
+              setPairExpired(false);
               setAccountModal(true);
             }}
             title="MovieBox account"
           >
             <span className="mb-account-dot" aria-hidden="true" />
             <UserRound size={15} />
-            <span>{c.authMode === 'account' ? 'Account' : 'Guest'}</span>
+            <span>{c.authMode === 'account' ? 'Account' : 'Sign in'}</span>
           </button>
         </div>
       </header>
@@ -409,76 +426,49 @@ export default function MovieBoxHub({
       )}
 
       {accountModal && (
-        <Modal title="MovieBox Pro Account" onClose={() => setAccountModal(false)}>
-          <p className="form-help">
-            {c.summary || 'Using instant Guest access.'} We email you a MovieBox code, then you choose a MovieBox password to finish signing in. Your MovieBox app keeps working as before. Or continue in Guest mode.
-          </p>
-          {canManage ? (
-            <form onSubmit={(e) => void (codeSent ? submitAccountLogin(e) : sendLoginCode(e))}>
-              <label>
-                Email or phone
-                <input
-                  value={loginAccount}
-                  onChange={(e) => { setLoginAccount(e.target.value); if (codeSent) { setCodeSent(false); setLoginCode(''); } }}
-                  placeholder="you@example.com"
-                  autoComplete="username"
-                  required
-                />
-              </label>
-              {codeSent && (
-                <label>
-                  Verification code
-                  <input
-                    value={loginCode}
-                    onChange={(e) => setLoginCode(e.target.value)}
-                    placeholder="6-digit code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    autoFocus
-                    required
-                  />
-                </label>
+        <Modal title="MovieBox Pro Account" onClose={() => { setAccountModal(false); setPairCode(''); }}>
+          {c.authMode === 'account' ? (
+            <>
+              <p className="form-help">{c.summary || 'Signed in.'}</p>
+              {loginError && <p className="form-error" role="alert">{loginError}</p>}
+              {canManage && (
+                <div className="form-actions">
+                  <button type="button" className="button ghost" disabled={loginBusy} onClick={() => void signOut()}>
+                    {loginBusy ? 'Signing out…' : 'Sign out'}
+                  </button>
+                </div>
               )}
-              {codeSent && (
-                <label>
-                  New MovieBox password
-                  <input
-                    type="password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="At least 6 characters"
-                    autoComplete="new-password"
-                    minLength={6}
-                    required
-                  />
-                </label>
-              )}
-              {codeSent && <p className="form-help" role="status">Code sent. Check your {loginAccount.includes('@') ? 'email' : 'phone'} and enter it above.</p>}
+            </>
+          ) : !canManage ? (
+            <p className="form-help">Your server owner manages this connection.</p>
+          ) : pairCode ? (
+            <div className="mb-pair">
+              <p className="form-help">
+                On your phone or computer, open movieboxpro.app, sign in, go to <strong>Code Login</strong> and enter this code:
+              </p>
+              <output className="mb-pair-code" aria-live="polite">{pairCode}</output>
+              <p className="form-help" role="status">Waiting for you to approve it… TesPlay signs in automatically.</p>
+              <div className="form-actions">
+                <a className="button ghost" href={pairApproveUrl} target="_blank" rel="noreferrer noopener">
+                  <ExternalLink size={16} />
+                  Open movieboxpro.app
+                </a>
+                <button type="button" className="button ghost" onClick={() => setPairCode('')}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="form-help">
+                Sign in with your MovieBox Pro account to play titles. TesPlay shows a code, and you approve it on movieboxpro.app — no password needed. TesPlay uses one of your account's device slots.
+              </p>
+              {pairExpired && <p className="form-error" role="alert">That code expired. Get a new one.</p>}
               {loginError && <p className="form-error" role="alert">{loginError}</p>}
               <div className="form-actions">
-                {!codeSent ? (
-                  <button type="submit" className="button primary" disabled={loginBusy || !loginAccount.trim()}>
-                    {loginBusy ? 'Sending…' : 'Send code'}
-                  </button>
-                ) : (
-                  <>
-                    <button type="submit" className="button primary" disabled={loginBusy || !loginCode.trim() || loginPassword.length < 6}>
-                      {loginBusy ? 'Signing in…' : 'Sign in'}
-                    </button>
-                    <button type="button" className="button ghost" disabled={loginBusy} onClick={(e) => void sendLoginCode(e as unknown as FormEvent)}>
-                      Resend code
-                    </button>
-                  </>
-                )}
-                {c.authMode === 'account' && (
-                  <button type="button" className="button ghost" disabled={loginBusy} onClick={() => void switchToGuest()}>
-                    Use Guest mode
-                  </button>
-                )}
+                <button type="button" className="button primary" disabled={loginBusy} onClick={() => void startPairing()}>
+                  {loginBusy ? 'Getting a code…' : 'Get sign-in code'}
+                </button>
               </div>
-            </form>
-          ) : (
-            <p className="form-help">Your server owner manages this connection.</p>
+            </>
           )}
         </Modal>
       )}

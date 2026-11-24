@@ -973,11 +973,9 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
         return res.json({
           ...result,
           categories: [
-            { id: "trending", name: "Trending" },
+            { id: "trending", name: "Featured" },
             { id: "movies", name: "Movies" },
             { id: "series", name: "TV Series" },
-            { id: "anime", name: "Anime" },
-            { id: "rankings", name: "Rankings" },
           ],
         });
       }
