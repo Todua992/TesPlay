@@ -80,15 +80,8 @@ export function sessionFromLogin(data) {
 export function createMovieBoxClient({ fetchImpl } = {}) {
   const doFetch = fetchImpl || globalThis.fetch;
 
-  // `bare` sends only module + params + uid + expiry (the shape the public
-  // mbp-stremio client uses for download URLs), with form appid 28.
-  async function call(c, module, params = {}, { session = sessionOf(c), timeout = 20000, bare = false } = {}) {
-    const payload = bare ? {
-      expired_date: Math.floor(Date.now() / 1000) + 3600,
-      ...(session ? { uid: session.uid } : {}),
-      module,
-      ...params,
-    } : {
+  async function call(c, module, params = {}, { session = sessionOf(c), timeout = 20000 } = {}) {
+    const payload = {
       childmode: "0",
       app_version: APP_VERSION,
       appid: APP_ID,
@@ -101,7 +94,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       module,
       ...params,
     };
-    const body = new URLSearchParams(bare ? { data: encodeRequest(payload), appid: "28" } : { data: encodeRequest(payload), appid: "27", platform: "android" });
+    const body = new URLSearchParams({ data: encodeRequest(payload), appid: "27", platform: "android" });
     let response;
     try {
       response = await doFetch(API_URL, {
@@ -148,11 +141,12 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     const session = sessionFromLogin(res.data);
     if (!session) throw providerError("MovieBox Pro approved the code but returned no session.", 502);
     // Register this device the way the official TV apps do; failures are non-fatal.
-    await call(c, "Device_v3", {
-      device_name: "TesPlay",
-      device_model: "TesPlay",
-    }, { session }).catch(() => null);
+    await registerDevice(c, session).catch(() => null);
     return { status: "approved", session };
+  }
+
+  function registerDevice(c, session) {
+    return call(c, "Device_v3", { device_name: "TesPlay", device_model: "TesPlay" }, { session });
   }
 
   // Renew a session that is close to expiring (User_token).
@@ -163,7 +157,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     return renewed ? { ...renewed, user: { ...session.user, ...Object.fromEntries(Object.entries(renewed.user).filter(([, v]) => v)) } } : null;
   }
 
-  return { call, startCodeLogin, pollCodeLogin, refreshSession };
+  return { call, startCodeLogin, pollCodeLogin, refreshSession, registerDevice };
 }
 
 // ---- catalogue mapping ------------------------------------------------------
@@ -244,7 +238,8 @@ function noStreamError(all, res) {
   try { host = new URL(all.find((s) => /^https?:\/\//i.test(String(s?.path || "")))?.path || "").host; } catch { /* no usable link */ }
   const keys = all[0] && typeof all[0] === "object" ? Object.keys(all[0]).slice(0, 12).join(",") : "";
   const dataKeys = res?.data && typeof res.data === "object" && !Array.isArray(res.data) ? Object.keys(res.data).slice(0, 12).join(",") : "";
-  const detail = `[code=${res?.code} msg=${String(res?.msg || "").slice(0, 60)} list=${all.length} withPath=${withPath} vip=${vip}${host ? ` host=${host}` : ""}${keys ? ` fields=${keys}` : ""}${dataKeys ? ` data=${dataKeys}` : ""}${res?.tried ? ` tried=${res.tried}` : ""}]`;
+  const quality = res?.data?.quality !== undefined ? ` quality=${JSON.stringify(res.data.quality).slice(0, 100)}` : "";
+  const detail = `[code=${res?.code} msg=${String(res?.msg || "").slice(0, 60)} list=${all.length} withPath=${withPath} vip=${vip}${host ? ` host=${host}` : ""}${keys ? ` fields=${keys}` : ""}${dataKeys ? ` data=${dataKeys}` : ""}${quality}${res?.tried ? ` tried=${res.tried}` : ""}]`;
   const message = vip && vip === all.length ? "This title needs a MovieBox Pro VIP account." : "MovieBox Pro has no playable stream for this title yet.";
   return providerError(`${message} ${detail}`, 404);
 }
@@ -379,28 +374,37 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
       ? { tid: parsed.id, season: String(parsed.season || 1), episode: String(parsed.episode || 1) }
       : { mid: parsed.id };
     const tokenUdid = decodeSessionToken(session.uid)?.token;
-    // Request shapes, most likely first. MovieBox Pro can answer "success"
-    // with an empty list when it doesn't like the shape, so try the next one
-    // until one returns a playable link, and remember what each returned.
-    const attempts = [
-      ["app", { ...params, oss: "1", group: "" }, {}],
-      ...(tokenUdid ? [
-        ["app+token", { ...params, oss: "1", group: "", open_udid: tokenUdid }, {}],
-        ["bare+token", { ...params, open_udid: tokenUdid }, { bare: true }],
-      ] : []),
-      ["bare", { ...params, open_udid: openUdidFor(c) }, { bare: true }],
-    ];
-    let res = null;
     const tried = [];
-    for (const [label, body, options] of attempts) {
-      const reply = await client.call(c, module, body, { session, ...options }).catch((e) => ({ code: "err", msg: e.message }));
-      const list = listOf(reply?.data);
-      tried.push(`${label}:${reply?.code}/${list.length}`);
-      if (!res || (res.code !== 1 && reply?.code === 1)) res = reply;
-      if (reply?.code === 1 && rankStreams(list).length) { res = reply; break; }
+    const request = async (label, extra = {}) => {
+      const reply = await client.call(c, module, { ...params, oss: "1", group: "", ...extra }, { session })
+        .catch((e) => ({ code: "err", msg: e.message }));
+      tried.push(`${label}:${reply?.code}/${listOf(reply?.data).length}`);
+      return reply;
+    };
+    const playable = (reply) => reply?.code === 1 && rankStreams(listOf(reply.data)).length > 0;
+    let res = await request("app");
+    if (!playable(res) && tokenUdid) {
+      const retry = await request("app+token", { open_udid: tokenUdid });
+      if (playable(retry) || res?.code !== 1) res = retry;
     }
-    res.tried = tried.join(" ");
-    if (res?.code !== 1) throw providerError(`${res?.msg || "MovieBox Pro could not load streams for this title."} [${res.tried}]`, 502);
+    // MovieBox Pro hands out links only to registered devices: if the list is
+    // still empty, (re)register this device and ask once more.
+    let device = "";
+    if (!playable(res)) {
+      const bind = await client.registerDevice(c, session).catch((e) => ({ code: "err", msg: e.message }));
+      device = `bind=${bind?.code}/${String(bind?.msg || "").slice(0, 40)}`;
+      if (bind?.code === 1) {
+        const again = await request("after-bind");
+        if (playable(again) || res?.code !== 1) res = again;
+      }
+      const devices = await client.call(c, "Device_list", {}, { session }).catch(() => null);
+      if (devices) {
+        const list = listOf(devices.data);
+        device += ` devices=${devices.code}/${list.length} ours=${JSON.stringify(devices.data ?? "").includes(openUdidFor(c)) ? "yes" : "no"}`;
+      }
+    }
+    if (res?.code !== 1) throw providerError(`${res?.msg || "MovieBox Pro could not load streams for this title."} [${tried.join(" ")}]`, 502);
+    res.tried = [tried.join(" "), device].filter(Boolean).join(" ");
     return { session, res, all: listOf(res.data), ranked: rankStreams(listOf(res.data)) };
   }
 

@@ -264,38 +264,38 @@ test("home feed falls back past rejected modules and never fails the page", asyn
   assert.deepEqual(empty.shelves, []);
 });
 
-test("an empty stream list explains what MovieBox Pro returned without exposing links", async () => {
+test("an empty stream list re-registers the device and explains what came back", async () => {
   const token = jwt(9, "tok9", inDays(30));
   const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
   const { svc, calls } = service({
-    Movie_downloadurl_v3: () => ({ code: 1, data: { list: [{ fid: 1, real_quality: "1080p", path: "" }, { fid: 2, real_quality: "4K", path: "", vip_only: 1 }] } }),
+    Movie_downloadurl_v3: () => ({ code: 1, msg: "success", data: { seconds: 0, quality: ["1080p"], ip: "x", list: [{ fid: 1, real_quality: "1080p", path: "" }, { fid: 2, real_quality: "4K", path: "", vip_only: 1 }] } }),
+    Device_v3: () => ({ code: 1, msg: "ok" }),
+    Device_list: () => ({ code: 1, data: { list: [{ open_udid: openUdidFor(signedIn), device_name: "TesPlay" }] } }),
   });
   await assert.rejects(svc.resolvePlayback({}, signedIn, "11", "movie"), (e) => {
     assert.equal(e.status, 404);
     assert.match(e.message, /list=2 withPath=0 vip=1/);
-    assert.match(e.message, /tried=app:1\/2 app\+token:1\/2 bare\+token:1\/2 bare:1\/2/);
+    assert.match(e.message, /quality=\["1080p"\]/);
+    assert.match(e.message, /tried=app:1\/2 app\+token:1\/2 after-bind:1\/2 bind=1\/ok devices=1\/1 ours=yes/);
+    assert.doesNotMatch(e.message, /https?:/);
     return true;
   });
   const tries = calls.filter((c) => c.module === "Movie_downloadurl_v3");
-  assert.equal(tries.length, 4);
+  assert.equal(tries.length, 3);
   assert.equal(tries[1].open_udid, "tok9");
-  assert.equal(tries[2].open_udid, "tok9");
-  assert.equal(tries[2].appid, undefined, "bare attempt sends no app fields");
-  assert.equal(tries[2].oss, undefined);
-  assert.equal(tries[2].uid, token);
-  assert.equal(tries[3].open_udid, openUdidFor(signedIn));
+  assert.equal(calls.filter((c) => c.module === "Device_v3").length, 1);
 });
 
-test("stream lookup stops at the first request shape that returns a playable link", async () => {
+test("streams appear once the device is registered", async () => {
   const token = jwt(9, "tok9", inDays(30));
   const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
-  const { svc, calls, registered } = service({
-    Movie_downloadurl_v3: (p) => (p.appid === undefined
-      ? { code: 1, data: { list: [{ fid: 3, real_quality: "1080p", path: "https://cdn/bare.mp4" }] } }
-      : { code: 1, data: { list: [] } }),
+  let bound = false;
+  const { svc, registered } = service({
+    Movie_downloadurl_v3: () => ({ code: 1, data: { list: bound ? [{ fid: 3, real_quality: "1080p", path: "https://cdn/m.mp4" }] : [] } }),
+    Device_v3: () => ((bound = true), { code: 1 }),
+    Device_list: () => ({ code: 1, data: [] }),
     Movie_srt_list_v3: () => ({ code: 1, data: { list: [] } }),
   });
   await svc.resolvePlayback({}, signedIn, "11", "movie");
-  assert.equal(calls.filter((c) => c.module === "Movie_downloadurl_v3").length, 3);
-  assert.equal(registered[0].url, "https://cdn/bare.mp4");
+  assert.equal(registered[0].url, "https://cdn/m.mp4");
 });
