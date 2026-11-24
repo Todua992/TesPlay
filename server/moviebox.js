@@ -16,12 +16,16 @@ const DEFAULT_BASE_URL = GLOBAL_BASE_URLS[0];
 // with 403 "Service not available in current region", so IN is the only region
 // that actually serves this deployment. A connection may still override via
 // config.region (e.g. US) once matching global gateway credentials exist.
-const DEFAULT_REGION = "IN";
+// Region only gates access (US/GB get 403 "Service not available in current
+// region" from an EU server; EU/DE/FR/IN return the same global catalogue), so
+// default to EU to match this deployment's location.
+const DEFAULT_REGION = "EU";
 const REGION_PROFILES = {
-  US: { timezone: "America/New_York", sp_code: "310260", hosts: GLOBAL_BASE_URLS },
-  GB: { timezone: "Europe/London", sp_code: "23430", hosts: GLOBAL_BASE_URLS },
+  EU: { timezone: "Europe/Copenhagen", sp_code: "23801", hosts: GLOBAL_BASE_URLS },
   DE: { timezone: "Europe/Berlin", sp_code: "26201", hosts: GLOBAL_BASE_URLS },
   FR: { timezone: "Europe/Paris", sp_code: "20801", hosts: GLOBAL_BASE_URLS },
+  US: { timezone: "America/New_York", sp_code: "310260", hosts: GLOBAL_BASE_URLS },
+  GB: { timezone: "Europe/London", sp_code: "23430", hosts: GLOBAL_BASE_URLS },
   IN: { timezone: "Asia/Kolkata", sp_code: "404", hosts: INDIA_BASE_URLS },
 };
 const regionProfile = (c) => REGION_PROFILES[c?.config?.region || DEFAULT_REGION] || REGION_PROFILES[DEFAULT_REGION];
@@ -371,9 +375,9 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     return { sent: true, channel: isEmail ? "email" : "phone" };
   }
 
-  // Step 2: exchange the code for a session token. The passwordless-login
-  // endpoint/field is not officially documented, so try the known shapes in
-  // order and accept the first that returns a token.
+  // Step 2: check-sms-code validates the code (confirmed: returns code 0). The
+  // session token comes back in its body or is issued through the x-user
+  // response header (rawRequest promotes that into the session state).
   async function verifyLoginCode(c, account, code) {
     const trimmed = String(account || "").trim();
     const otp = String(code || "").trim();
@@ -381,30 +385,30 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     const isEmail = trimmed.includes("@");
     const identity = isEmail ? { mail: trimmed } : { phone: trimmed };
     const base = { package_name: "com.community.oneroom", authType: isEmail ? 1 : 0, ...identity };
-    const attempts = [
-      ["/wefeed-mobile-bff/user-api/login", { ...base, type: 0, verificationCode: otp }],
-      ["/wefeed-mobile-bff/user-api/check-sms-code", { ...base, type: 2, verificationCode: otp }],
-      ["/wefeed-mobile-bff/user-api/login", { ...base, type: 0, smsCode: otp }],
-    ];
-    const diag = [];
-    for (const [endpoint, payload] of attempts) {
-      const field = payload.verificationCode !== undefined ? "verificationCode" : "smsCode";
-      const res = await request(c, "POST", endpoint, { data: payload }).catch((err) => ({ _err: err }));
-      if (res && !res._err && [0, 200].includes(res.code) && res.data?.token) {
-        return {
-          token: res.data.token,
-          userId: String(res.data.userId || res.data.uid || ""),
-          userInfo: {
-            nickname: res.data.nickname || trimmed,
-            avatar: res.data.avatar || "",
-            email: res.data.mail || (isEmail ? trimmed : ""),
-          },
-        };
-      }
-      const tag = `${endpoint.split("/").pop()}+${field}`;
-      diag.push(res && !res._err ? `${tag}: code=${res.code} msg=${res.msg || res.message || "?"}` : `${tag}: ${res?._err?.message || "request failed"}`);
+    const before = sessionState(c).token;
+    const check = await request(c, "POST", "/wefeed-mobile-bff/user-api/check-sms-code", {
+      data: { ...base, type: 2, verificationCode: otp },
+    });
+    const d = check?.data || {};
+    const bodyToken = d.token || d.accessToken || d.jwt || d.userToken || d.sessionToken || d.authToken;
+    // x-user may have promoted the guest session to a user token during the call.
+    const after = sessionState(c).token;
+    const promotedToken = after && after !== before ? after : null;
+    const token = bodyToken || promotedToken;
+    if ([0, 200].includes(check?.code) && token) {
+      return {
+        token,
+        userId: String(d.userId || d.uid || sessionState(c).userId || ""),
+        userInfo: {
+          nickname: d.nickname || d.userName || trimmed,
+          avatar: d.avatar || "",
+          email: d.mail || (isEmail ? trimmed : ""),
+        },
+      };
     }
-    throw providerError(`MovieBox rejected this verification code. [${diag.join(" | ")}]`, 401);
+    // Temporary diagnostic: field names + value types only, never the values.
+    const shape = Object.entries(d).map(([k, v]) => `${k}:${typeof v === "string" ? "str" + v.length : Array.isArray(v) ? "arr" : typeof v}`).join(",") || "none";
+    throw providerError(`check-sms-code code=${check?.code} msg=${check?.msg || check?.message || "?"} bodyFields=[${shape}] xUserPromoted=${promotedToken ? "yes" : "no"}`, 401);
   }
 
   return { request, loginAccount, requestLoginCode, verifyLoginCode };
