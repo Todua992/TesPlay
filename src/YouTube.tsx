@@ -135,6 +135,7 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
   return <section className="page-section youtube-hub yt-hub">
     <header className="yt-top">
       <span className="yt-brand"><YouTubeLogo/><span>YouTube</span></span>
+      {!searching&&<nav className="youtube-tabs yt-tabs" aria-label="YouTube sections">{tabs.map(([value,label,Icon])=><button key={value} className={pane===value?'selected':''} aria-pressed={pane===value} onClick={()=>changePane(value)}><Icon size={15}/>{label}</button>)}</nav>}
       <form className="yt-search" role="search" onSubmit={submitSearch}>
         <Search size={19} aria-hidden="true"/>
         <input aria-label="Search YouTube or paste a video link" placeholder="Search YouTube or paste a link" value={draft} onChange={e=>setDraft(e.target.value)} enterKeyHint="search"/>
@@ -147,9 +148,7 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
       </div>
     </header>
 
-    {searching
-      ?<div className="yt-results-head"><h2>Results for <q>{query}</q></h2><button className="text-button" onClick={exitSearch}><X size={16}/>Back to {paneLabel[returnPane]}</button></div>
-      :<nav className="youtube-tabs yt-tabs" aria-label="YouTube sections">{tabs.map(([value,label,Icon])=><button key={value} className={pane===value?'selected':''} aria-pressed={pane===value} onClick={()=>changePane(value)}><Icon size={16}/>{label}</button>)}</nav>}
+    {searching&&<div className="yt-results-head"><h2>Results for <q>{query}</q></h2><button className="text-button" onClick={exitSearch}><X size={16}/>Back to {paneLabel[returnPane]}</button></div>}
 
     {error&&<div className="form-error" role="alert">{error}<button className="text-button" onClick={reconnect?onConnect:()=>setRefresh(n=>n+1)}>{reconnect?'Reconnect Google':'Try again'}</button></div>}
     {partial&&<p className="form-help" role="status">Some channels could not load. Your other channels are shown below.</p>}

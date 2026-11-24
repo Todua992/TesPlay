@@ -23,7 +23,7 @@
   display: grid;
   place-items: center;
   text-align: center;
-  color: #222;
+  color: var(--on-inverse);
   font-size: 14px;
 }
 .qr-login {
@@ -76,9 +76,9 @@
   justify-content: space-between;
   gap: 24px;
   padding: 22px;
-  border: 1px solid #ffffff18;
+  border: 1px solid rgb(var(--ink) / 9%);
   border-radius: 16px;
-  background: #ffffff04;
+  background: rgb(var(--ink) / 2%);
   margin: 24px 0;
 }
 .phone-setup-notice h3 {
@@ -87,7 +87,7 @@
 }
 .phone-setup-notice p {
   margin: 0;
-  color: var(--muted, #a3a3ab);
+  color: var(--muted, var(--muted));
   font-size: 14px;
   line-height: 1.5;
 }
@@ -98,7 +98,7 @@
   display: block;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--muted, #a3a3ab);
+  color: var(--muted, var(--muted));
   margin: 4px 0;
 }
 .connection-mode {
@@ -121,7 +121,7 @@
 .device-approval-page {
   min-height: 100dvh;
   padding: 36px 24px;
-  background: radial-gradient(ellipse at 50% 15%, #252130 0%, #0c0c10 65%);
+  background: radial-gradient(ellipse at 50% 15%, var(--raised) 0%, var(--bg) 65%);
   display: flex;
   align-items: center;
   flex-direction: column;
@@ -146,13 +146,13 @@
   padding-left: 20px;
   line-height: 1.8;
   font-size: 14px;
-  color: var(--muted, #a3a3ab);
+  color: var(--muted, var(--muted));
 }
 .phone-setup-account {
   font-size: 13px;
   padding: 12px;
   border-radius: 8px;
-  background: #ffffff07;
+  background: rgb(var(--ink) / 3%);
 }
 .phone-setup-done {
   margin-top: 18px;

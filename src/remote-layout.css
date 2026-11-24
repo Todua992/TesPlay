@@ -36,8 +36,8 @@
 .remote-paired .inline-search input { font-size: 16px; min-height: 44px; padding: 10px 0; min-width: 0; }
 .remote-paired .inline-search button { min-width: 44px; min-height: 44px; padding: 8px; }
 .remote-paired .remote-source-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
-.remote-paired .remote-source-buttons button { min-height: 44px; min-width: 44px; padding: 8px 12px; font-size: 12px; background: #ffffff04; border-color: var(--line); border-radius: 12px; }
-.remote-paired .remote-source-buttons button[aria-pressed=true] { color: #ffad98; background: #f5654515; border-color: #f5654540; }
+.remote-paired .remote-source-buttons button { min-height: 44px; min-width: 44px; padding: 8px 12px; font-size: 12px; background: rgb(var(--ink) / 2%); border-color: var(--line); border-radius: 12px; }
+.remote-paired .remote-source-buttons button[aria-pressed=true] { color: var(--accent-text); background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
 .remote-paired .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr)); gap: 18px 14px; }
 .remote-paired .page-section { padding: 12px 0; }
 .remote-paired .library-layout { display: block; }
@@ -192,6 +192,6 @@
   .remote-drawer, .remote-drawer-backdrop { transition: none; }
 }
 @media (prefers-contrast: more) {
-  .remote-drawer { border-color: #fff9; }
+  .remote-drawer { border-color: rgb(var(--ink) / 60%); }
   .remote-paired .cinema-title p, .remote-paired .cinema-volume output, .remote-paired .cinema-eyeline { color: #ddd; }
 }

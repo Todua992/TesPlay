@@ -21,9 +21,10 @@ import {
   RefreshCw,
   Clock,
   Info,
+  History,
 } from "lucide-react";
 import { api, errorMessage } from "./api";
-import { Brand, Busy, Card, Empty, Modal, MediaDetailsContext } from "./components";
+import { Brand, Busy, Card, Empty, Modal, MediaDetailsContext, ThemeSwitch } from "./components";
 import type {
   Auth,
   Connection,
@@ -829,6 +830,8 @@ export default function App() {
       {deleteProfileId&&<Modal title="Remove this profile?" onClose={()=>{if(!profileBusy)setDeleteProfileId(null);}}><p>{auth.profiles.find(p=>p.id===deleteProfileId)?.name}’s viewing history, watchlist, playlist and saved preferences will be removed. This cannot be undone.</p><div className="form-actions"><button className="button danger" disabled={profileBusy} onClick={async()=>{setProfileBusy(true);try{await api(`/profiles/${deleteProfileId}`,{},'DELETE');if(deleteProfileId===auth.activeProfileId){setPlayer(null);setRoomId('');setControllerRoom('');setView('home');}await reloadAuth();setDeleteProfileId(null);showToast('Profile removed.');}catch(e){showToast(errorMessage(e));}finally{setProfileBusy(false);}}}>{profileBusy?'Removing…':'Remove profile'}</button><button className="button ghost" disabled={profileBusy} onClick={()=>setDeleteProfileId(null)}>Cancel</button></div></Modal>}
       {profileOpen && (
         <Modal title="Who’s watching?" onClose={() => setProfileOpen(false)}>
+          <div className="profile-menu-extras"><div className="profile-menu-theme"><span>Appearance</span><ThemeSwitch /></div>
+            <div className="profile-menu-links">{([['history','History',History],['connections','Sources',Cable],['settings','Settings',Settings]] as const).map(([target,label,Icon])=><button key={target} type="button" className="button ghost small" onClick={()=>{setProfileOpen(false);navigate(target);}}><Icon size={15}/>{label}</button>)}</div></div>
           <p className="form-help">
             Your watchlist and progress follow your profile.
           </p>

@@ -1,3 +1,5 @@
+import { Sun, Moon, SunMoon } from "lucide-react";
+import { useThemePreference, type ThemePreference } from "./theme";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -290,4 +292,11 @@ export function Row({
       </div>
     </section>
   );
+}
+export function ThemeSwitch() {
+  const [value, setValue] = useThemePreference();
+  const options: [ThemePreference, string, typeof Sun][] = [['auto', 'Auto', SunMoon], ['light', 'Light', Sun], ['dark', 'Dark', Moon]];
+  return <div className="theme-switch" role="radiogroup" aria-label="Appearance">
+    {options.map(([key, label, Icon]) => <button type="button" key={key} role="radio" aria-checked={value === key} onClick={() => setValue(key)}><Icon size={15} aria-hidden="true" />{label}</button>)}
+  </div>;
 }

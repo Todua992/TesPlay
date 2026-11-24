@@ -13,7 +13,7 @@
   height: 8px;
   flex: none;
   border-radius: 50%;
-  background: #f56545;
+  background: #e82127;
 }
 .live-indicator[data-playing="true"] .live-indicator-dot {
   animation: live-indicator-pulse 1.8s ease-in-out infinite;

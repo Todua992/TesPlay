@@ -3,6 +3,8 @@ import { lazy, Suspense } from "react";
 import App from "./App";
 import PageRecovery from "./PageRecovery";
 import "./styles.css";
+import { startTheme } from "./theme";
+startTheme();
 const ScreenCheck = lazy(() => import("./ScreenCheck"));
 const screenCheck = new URLSearchParams(location.search).get("screen-check") === "1";
 createRoot(document.getElementById("root")!).render(

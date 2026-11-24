@@ -60,7 +60,7 @@ body:has(.cinema-remote) {
   margin-bottom: 15px;
 }
 .cinema-eyeline b {
-  color: #f56545;
+  color: #e82127;
   letter-spacing: 1px;
 }
 .cinema-artwork {
@@ -109,9 +109,9 @@ body:has(.cinema-remote) {
   margin: 7px 0 0;
 }
 .cinema-source {
-  background: #f5654512;
-  color: #f58a74;
-  border: 1px solid #f5654525;
+  background: #e8212712;
+  color: #ff5a5f;
+  border: 1px solid #e8212725;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.7px;
@@ -123,7 +123,7 @@ body:has(.cinema-remote) {
   white-space: nowrap;
 }
 .cinema-remote input[type="range"] {
-  accent-color: #f56545;
+  accent-color: #e82127;
   width: 100%;
   height: 18px;
   margin: 0;
@@ -146,7 +146,7 @@ body:has(.cinema-remote) {
   cursor: default;
 }
 .cinema-remote button:focus-visible {
-  outline: 2px solid #f58a74;
+  outline: 2px solid #ff5a5f;
   outline-offset: 4px;
 }
 .cinema-transport {
@@ -177,12 +177,12 @@ body:has(.cinema-remote) {
   font-weight: 700;
 }
 .cinema-transport .cinema-play {
-  background: #f56545;
+  background: #e82127;
   border-radius: 50%;
   width: 66px;
   height: 66px;
   color: white;
-  box-shadow: 0 8px 25px #f5654525;
+  box-shadow: 0 8px 25px #e8212725;
 }
 .cinema-play .busy {
   padding: 0;
@@ -234,7 +234,7 @@ body:has(.cinema-remote) {
 }
 .cinema-actions button[aria-pressed="true"],
 .cinema-actions button[aria-expanded="true"] {
-  color: #f58a74;
+  color: #ff5a5f;
 }
 .cinema-help {
   font-size: 12px;
@@ -266,7 +266,7 @@ body:has(.cinema-remote) {
   color: inherit;
 }
 .cinema-options .text-button {
-  color: #f58a74;
+  color: #ff5a5f;
   text-align: left;
 }
 .cinema-browse {
@@ -285,8 +285,8 @@ body:has(.cinema-remote) {
   flex: 1;
 }
 .cinema-pair-icon {
-  color: #f58a74;
-  background: #f5654512;
+  color: #ff5a5f;
+  background: #e8212712;
   border-radius: 18px;
   display: grid;
   place-items: center;
@@ -493,12 +493,12 @@ html:has(.cinema-remote),body:has(.cinema-remote){height:100%;min-width:0;overfl
 .cinema-progress{flex:none}
 .cinema-progress>.cinema-progress-heading{margin-top:0;align-items:center;min-height:34px}
 .cinema-progress-heading button{width:36px;height:34px;background:none;border:0;display:grid;place-items:center;color:#a1a1aa;padding:0}
-.cinema-progress-heading button[aria-pressed=true]{color:#f58a74}
+.cinema-progress-heading button[aria-pressed=true]{color:#ff5a5f}
 .cinema-transport{flex:none;display:grid;grid-template-columns:repeat(2,minmax(44px,1fr)) auto repeat(2,minmax(44px,1fr));gap:4px;margin:3px 0;justify-content:stretch}
 .cinema-transport button{min-width:44px;min-height:44px;padding:0}
 .cinema-transport button>svg{width:25px;height:25px}
 .cinema-transport .cinema-play{width:60px;height:60px;justify-self:center}
-.cinema-transport button[aria-pressed=true],.cinema-transport button[aria-expanded=true]{color:#f58a74}
+.cinema-transport button[aria-pressed=true],.cinema-transport button[aria-expanded=true]{color:#ff5a5f}
 .cinema-help{flex:none;font-size:11px;line-height:1.35;margin:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .cinema-volume{flex:none;min-height:40px;gap:10px;margin:0}
 .cinema-volume input{min-width:0}
@@ -515,13 +515,13 @@ html:has(.cinema-remote),body:has(.cinema-remote){height:100%;min-width:0;overfl
 .remote-video-panel label > span, .remote-video-panel small { color: #a1a1aa; }
 .remote-video-panel input { min-width: 0; width: 100%; }
 .remote-video-panel .remote-video-compatibility { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 18px; cursor: pointer; }
-.remote-video-panel .remote-video-compatibility input { width: 18px; min-height: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: #f56545; }
+.remote-video-panel .remote-video-compatibility input { width: 18px; min-height: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: #e82127; }
 .remote-video-compatibility span { font-size: 13px; }
 .remote-video-compatibility small { display: block; margin-top: 5px; line-height: 1.4; }
 .remote-video-file { padding: 18px; border: 1px dashed #ffffff30; border-radius: 12px; background: #ffffff05; }
 .remote-video-file input { font-size: 12px; padding: 8px 0; background: none; border: 0; }
 .remote-video-selected { overflow-wrap: anywhere; }
-.remote-video-panel progress { display: block; width: 100%; accent-color: #f56545; margin-bottom: 8px; }
+.remote-video-panel progress { display: block; width: 100%; accent-color: #e82127; margin-bottom: 8px; }
 .remote-video-panel [role=status] { font-size: 12px; color: #a1a1aa; }
 .remote-video-panel > .text-button { margin-top: 15px; min-height: 44px; }
 .remote-video-recent { margin-top: 24px; border-top: 1px solid #ffffff18; padding-top: 10px; }
