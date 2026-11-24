@@ -44,7 +44,12 @@ export function generateClientToken(timestamp = Date.now()) {
 }
 
 export function generateTrSignature(method, url, bodyData = "", timestamp = Date.now()) {
-  const parsed = new URL(url);
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw providerError(`MovieBox request URL was invalid: ${String(url).slice(0, 160)}`, 502);
+  }
   const path = parsed.pathname;
   const entries = [];
   for (const [k, v] of parsed.searchParams.entries()) entries.push([k, v]);
