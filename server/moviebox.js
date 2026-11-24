@@ -356,8 +356,11 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     };
   }
 
-  // MovieBox dropped password login in favour of an emailed/SMS verification
-  // code. Step 1: ask MovieBox to send the code to the account.
+  // The MovieBox app signs in with an emailed/SMS code, but the API has no
+  // passwordless token endpoint: check-sms-code only validates, and /login
+  // always requires a password. So we use the password-reset flow: send a
+  // reset code, set a MovieBox password with it, then log in with that password.
+  // Step 1: ask MovieBox to send a reset code to the account.
   async function requestLoginCode(c, account) {
     const trimmed = String(account || "").trim();
     if (!trimmed) throw providerError("Enter your MovieBox email or phone.");
@@ -365,7 +368,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     const payload = {
       package_name: "com.community.oneroom",
       authType: isEmail ? 1 : 0,
-      type: 2, // 1 = Register, 2 = Login, 3 = Reset
+      type: 3, // 1 = Register, 2 = Login, 3 = Reset password
       ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
     };
     const res = await request(c, "POST", "/wefeed-mobile-bff/user-api/get-sms-code", { data: payload });
@@ -375,40 +378,27 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     return { sent: true, channel: isEmail ? "email" : "phone" };
   }
 
-  // Step 2: check-sms-code validates the code (confirmed: returns code 0). The
-  // session token comes back in its body or is issued through the x-user
-  // response header (rawRequest promotes that into the session state).
-  async function verifyLoginCode(c, account, code) {
+  // Step 2: set the MovieBox password with the reset code, then log in with it.
+  async function verifyLoginCode(c, account, code, password) {
     const trimmed = String(account || "").trim();
     const otp = String(code || "").trim();
     if (!trimmed || !otp) throw providerError("Enter your MovieBox email/phone and the verification code.");
+    if (!password || String(password).length < 6) throw providerError("Choose a MovieBox password of at least 6 characters.");
     const isEmail = trimmed.includes("@");
-    const identity = isEmail ? { mail: trimmed } : { phone: trimmed };
-    const base = { package_name: "com.community.oneroom", authType: isEmail ? 1 : 0, ...identity };
-    const before = sessionState(c).token;
-    const check = await request(c, "POST", "/wefeed-mobile-bff/user-api/check-sms-code", {
-      data: { ...base, type: 2, verificationCode: otp },
+    const reset = await request(c, "POST", "/wefeed-mobile-bff/user-api/reset-password", {
+      data: {
+        package_name: "com.community.oneroom",
+        authType: isEmail ? 1 : 0,
+        type: 3,
+        verificationCode: otp,
+        password: md5Hex(password),
+        ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
+      },
     });
-    const d = check?.data || {};
-    const bodyToken = d.token || d.accessToken || d.jwt || d.userToken || d.sessionToken || d.authToken;
-    // x-user may have promoted the guest session to a user token during the call.
-    const after = sessionState(c).token;
-    const promotedToken = after && after !== before ? after : null;
-    const token = bodyToken || promotedToken;
-    if ([0, 200].includes(check?.code) && token) {
-      return {
-        token,
-        userId: String(d.userId || d.uid || sessionState(c).userId || ""),
-        userInfo: {
-          nickname: d.nickname || d.userName || trimmed,
-          avatar: d.avatar || "",
-          email: d.mail || (isEmail ? trimmed : ""),
-        },
-      };
+    if (![0, 200].includes(reset?.code)) {
+      throw providerError(reset?.msg || reset?.message || "MovieBox rejected this verification code.", 401);
     }
-    // Temporary diagnostic: field names + value types only, never the values.
-    const shape = Object.entries(d).map(([k, v]) => `${k}:${typeof v === "string" ? "str" + v.length : Array.isArray(v) ? "arr" : typeof v}`).join(",") || "none";
-    throw providerError(`check-sms-code code=${check?.code} msg=${check?.msg || check?.message || "?"} bodyFields=[${shape}] xUserPromoted=${promotedToken ? "yes" : "no"}`, 401);
+    return loginAccount(c, trimmed, password);
   }
 
   return { request, loginAccount, requestLoginCode, verifyLoginCode };
@@ -877,7 +867,7 @@ export function registerMovieBoxRoutes(app, { ctx, connection, route, art, media
     const c = connection(req, req.params.connectionId, "moviebox");
     const { account, code, password } = req.body || {};
     const auth = code
-      ? await client.verifyLoginCode(c, account, code)
+      ? await client.verifyLoginCode(c, account, code, password)
       : await client.loginAccount(c, account, password);
     const updated = ctx.saveConnection(req, {
       id: c.id,

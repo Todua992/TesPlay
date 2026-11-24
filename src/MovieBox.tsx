@@ -58,6 +58,7 @@ export default function MovieBoxHub({
   const [accountModal, setAccountModal] = useState(false);
   const [loginAccount, setLoginAccount] = useState('');
   const [loginCode, setLoginCode] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -184,8 +185,9 @@ export default function MovieBoxHub({
     setLoginBusy(true);
     setLoginError('');
     try {
-      await api(`/moviebox/${c.id}/login`, { account: loginAccount.trim(), code: loginCode.trim() });
+      await api(`/moviebox/${c.id}/login`, { account: loginAccount.trim(), code: loginCode.trim(), password: loginPassword });
       setLoginCode('');
+      setLoginPassword('');
       setCodeSent(false);
       await onReloadConnections();
       setAccountModal(false);
@@ -289,6 +291,7 @@ export default function MovieBoxHub({
             onClick={() => {
               setLoginError('');
               setLoginCode('');
+              setLoginPassword('');
               setCodeSent(false);
               setAccountModal(true);
             }}
@@ -406,7 +409,7 @@ export default function MovieBoxHub({
       {accountModal && (
         <Modal title="MovieBox Pro Account" onClose={() => setAccountModal(false)}>
           <p className="form-help">
-            {c.summary || 'Using instant Guest access.'} MovieBox signs you in with a verification code sent to your email or phone. Or continue in Guest mode.
+            {c.summary || 'Using instant Guest access.'} We email you a MovieBox code, then you choose a MovieBox password to finish signing in. Your MovieBox app keeps working as before. Or continue in Guest mode.
           </p>
           {canManage ? (
             <form onSubmit={(e) => void (codeSent ? submitAccountLogin(e) : sendLoginCode(e))}>
@@ -434,6 +437,20 @@ export default function MovieBoxHub({
                   />
                 </label>
               )}
+              {codeSent && (
+                <label>
+                  New MovieBox password
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                </label>
+              )}
               {codeSent && <p className="form-help" role="status">Code sent. Check your {loginAccount.includes('@') ? 'email' : 'phone'} and enter it above.</p>}
               {loginError && <p className="form-error" role="alert">{loginError}</p>}
               <div className="form-actions">
@@ -443,7 +460,7 @@ export default function MovieBoxHub({
                   </button>
                 ) : (
                   <>
-                    <button type="submit" className="button primary" disabled={loginBusy || !loginCode.trim()}>
+                    <button type="submit" className="button primary" disabled={loginBusy || !loginCode.trim() || loginPassword.length < 6}>
                       {loginBusy ? 'Signing in…' : 'Sign in'}
                     </button>
                     <button type="button" className="button ghost" disabled={loginBusy} onClick={(e) => void sendLoginCode(e as unknown as FormEvent)}>
