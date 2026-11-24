@@ -228,6 +228,19 @@ export function rankStreams(list) {
   return [...playable].sort((a, b) => score(b) - score(a));
 }
 
+// Explain an empty stream list; the bracket summarises the response without
+// exposing signed links (host only).
+function noStreamError(all, res) {
+  const vip = all.filter((s) => Number(s?.vip_only) || /vip_only/i.test(String(s?.path || ""))).length;
+  const withPath = all.filter((s) => typeof s?.path === "string" && s.path).length;
+  let host = "";
+  try { host = new URL(all.find((s) => /^https?:\/\//i.test(String(s?.path || "")))?.path || "").host; } catch { /* no usable link */ }
+  const keys = all[0] && typeof all[0] === "object" ? Object.keys(all[0]).slice(0, 12).join(",") : "";
+  const detail = `[code=${res?.code} msg=${String(res?.msg || "").slice(0, 60)} list=${all.length} withPath=${withPath} vip=${vip}${host ? ` host=${host}` : ""}${keys ? ` fields=${keys}` : ""}]`;
+  const message = vip && vip === all.length ? "This title needs a MovieBox Pro VIP account." : "MovieBox Pro has no playable stream for this title yet.";
+  return providerError(`${message} ${detail}`, 404);
+}
+
 const streamLabel = (s) =>
   [s.real_quality || "Auto", Number(s.h265) ? "H.265" : "", Number(s.hdr) ? "HDR" : "", Number(s.vip_only) ? "VIP" : ""].filter(Boolean).join(" · ");
 
@@ -257,11 +270,21 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
     return session;
   }
 
+  // MovieBox Pro rejects home modules it does not serve to this app id with
+  // "module_not_allowed"; try the MovieBox Pro one first, then the older one.
+  // An unavailable home feed yields no rows rather than failing the page.
+  const HOME_MODULES = ["Home_list_type_v5", "Home_list_type_v2"];
   async function homeRows(c, page) {
     return cached(`${cacheKey(c)}:home:${page}`, async () => {
-      const res = await client.call(c, "Home_list_type_v2", { type: "all", page: String(page), pagelimit: "10" });
-      if (res?.code !== 1) throw providerError(res?.msg || "MovieBox Pro could not load its catalogue.", 502);
-      return listOf(res.data);
+      for (const module of HOME_MODULES) {
+        const res = await client.call(c, module, { type: "all", page: String(page), pagelimit: "10" });
+        if (res?.code === 1) return listOf(res.data);
+        if (!/module_not_allowed/i.test(String(res?.msg || ""))) {
+          throw providerError(res?.msg || "MovieBox Pro could not load its catalogue.", 502);
+        }
+      }
+      console.warn("MovieBox Pro: no home module is allowed for this app; showing search only.");
+      return [];
     }, 300);
   }
 
@@ -349,11 +372,13 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
       : { mid: parsed.id };
     let res = await client.call(c, module, { ...params, oss: "1", group: "" }, { session });
     const tokenUdid = decodeSessionToken(session.uid)?.token;
-    if ((res?.code !== 1 || !listOf(res.data).length) && tokenUdid) {
-      res = await client.call(c, module, { ...params, oss: "1", group: "", open_udid: tokenUdid }, { session });
+    // Some accounts only get real links when the device id is the session token.
+    if ((res?.code !== 1 || !rankStreams(listOf(res.data)).length) && tokenUdid) {
+      const retry = await client.call(c, module, { ...params, oss: "1", group: "", open_udid: tokenUdid }, { session });
+      if (retry?.code === 1 && (res?.code !== 1 || rankStreams(listOf(retry.data)).length)) res = retry;
     }
     if (res?.code !== 1) throw providerError(res?.msg || "MovieBox Pro could not load streams for this title.", 502);
-    return { session, all: listOf(res.data), ranked: rankStreams(listOf(res.data)) };
+    return { session, res, all: listOf(res.data), ranked: rankStreams(listOf(res.data)) };
   }
 
   async function fetchSubtitles(c, session, parsed, isSeries, fid) {
@@ -382,11 +407,8 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
   async function resolvePlaybackOptions(req, c, itemId, kind) {
     const parsed = parseItemId(itemId);
     const isSeries = parsed.isEpisode || kind === "episode" || kind === "series";
-    const { ranked, all } = await fetchStreams(req, c, parsed, isSeries);
-    if (!ranked.length) {
-      const vipOnly = all.some((s) => Number(s?.vip_only) || /vip_only/i.test(String(s?.path || "")));
-      throw providerError(vipOnly ? "This title needs a MovieBox Pro VIP account." : "MovieBox Pro has no playable stream for this title yet.", 404);
-    }
+    const { ranked, all, res } = await fetchStreams(req, c, parsed, isSeries);
+    if (!ranked.length) throw noStreamError(all, res);
     return {
       audio: [],
       subtitles: [],
@@ -403,8 +425,8 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
   async function resolvePlayback(req, c, itemId, kind, query = {}) {
     const parsed = parseItemId(itemId);
     const isSeries = parsed.isEpisode || kind === "episode" || kind === "series";
-    const { session, ranked } = await fetchStreams(req, c, parsed, isSeries);
-    if (!ranked.length) throw providerError("MovieBox Pro has no playable stream for this title yet.", 404);
+    const { session, ranked, all, res } = await fetchStreams(req, c, parsed, isSeries);
+    if (!ranked.length) throw noStreamError(all, res);
     const wantedFid = /^mbp-src-\d+$/.test(String(query.sourceId || "")) ? String(query.sourceId).slice(8) : "";
     const wantedQuality = query.qualityId && query.qualityId !== "auto" ? String(query.qualityId).toLowerCase() : "";
     const chosen =

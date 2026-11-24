@@ -111,7 +111,7 @@ test("code login reports a full device list and rejects malformed codes", async 
 
 test("discover, browse and search map MovieBox Pro titles", async () => {
   const { svc, calls } = service({
-    Home_list_type_v2: () => ({
+    Home_list_type_v5: () => ({
       code: 1,
       data: [
         { name: "Hot Movies", list: [{ id: 11, box_type: 1, title: "Inception", poster: "https://img/p.jpg", year: 2010, imdb_rating: "8.8", cats: "Sci-Fi,Action" }] },
@@ -244,4 +244,37 @@ test("item ids are validated", () => {
   assert.deepEqual(parseItemId("55:2:3"), { id: "55", season: 2, episode: 3, isEpisode: true });
   assert.deepEqual(parseItemId("11"), { id: "11", season: 0, episode: 0, isEpisode: false });
   assert.throws(() => parseItemId("../etc"), /not valid/);
+});
+
+test("home feed falls back past rejected modules and never fails the page", async () => {
+  const tried = [];
+  const { svc } = service({
+    Home_list_type_v5: (p) => (tried.push(p.module), { code: 0, msg: "module_not_allowed" }),
+    Home_list_type_v2: (p) => (tried.push(p.module), { code: 1, data: [{ name: "Row", list: [{ id: 1, box_type: 1, title: "A" }] }] }),
+  });
+  const discover = await svc.discoverShelves({}, conn());
+  assert.deepEqual(tried, ["Home_list_type_v5", "Home_list_type_v2"]);
+  assert.equal(discover.shelves[0].items[0].title, "A");
+
+  const none = service({
+    Home_list_type_v5: () => ({ code: 0, msg: "module_not_allowed" }),
+    Home_list_type_v2: () => ({ code: 0, msg: "module_not_allowed" }),
+  });
+  const empty = await none.svc.discoverShelves({}, conn());
+  assert.deepEqual(empty.shelves, []);
+});
+
+test("an empty stream list explains what MovieBox Pro returned without exposing links", async () => {
+  const token = jwt(9, "tok9", inDays(30));
+  const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
+  const { svc, calls } = service({
+    Movie_downloadurl_v3: () => ({ code: 1, data: { list: [{ fid: 1, real_quality: "1080p", path: "" }, { fid: 2, real_quality: "4K", path: "", vip_only: 1 }] } }),
+  });
+  await assert.rejects(svc.resolvePlayback({}, signedIn, "11", "movie"), (e) => {
+    assert.equal(e.status, 404);
+    assert.match(e.message, /list=2 withPath=0 vip=1/);
+    return true;
+  });
+  assert.equal(calls.filter((c) => c.module === "Movie_downloadurl_v3").length, 2, "retries with the session device id");
+  assert.equal(calls[1].open_udid, "tok9");
 });
