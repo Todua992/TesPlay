@@ -3,20 +3,26 @@ import { plainText } from "./text.js";
 import { providerError, validateRemoteUrl } from "./media.js";
 
 const GATEWAY_SECRET_ONLINE = "76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O";
-const DEFAULT_BASE_URL = "https://apig.inmoviebox.com";
-const FALLBACK_BASE_URLS = ["https://apig.inmoviebox.com", "https://api6.aoneroom.com"];
+
+// Global ("aoneroom") hosts serve the worldwide catalogue; the "inmoviebox"
+// hosts are the India gateway and reject a non-IN region with
+// "Service not available in current region". Region and host must match.
+const GLOBAL_BASE_URLS = ["https://i-api.aoneroom.com", "https://api.aoneroom.com"];
+const INDIA_BASE_URLS = ["https://apig.inmoviebox.com", "https://api6.aoneroom.com"];
+const DEFAULT_BASE_URL = GLOBAL_BASE_URLS[0];
 
 // MovieBox geo-routes its catalog (trending, genre-top, search ranking) off the
-// `region` header and client-info. Default to US ("global English") instead of
-// India; each connection may override via config.region.
+// `region` header, client-info and the base host. Default to US ("global
+// English") instead of India; each connection may override via config.region.
 const DEFAULT_REGION = "US";
 const REGION_PROFILES = {
-  US: { timezone: "America/New_York", sp_code: "310260" },
-  GB: { timezone: "Europe/London", sp_code: "23430" },
-  DE: { timezone: "Europe/Berlin", sp_code: "26201" },
-  FR: { timezone: "Europe/Paris", sp_code: "20801" },
-  IN: { timezone: "Asia/Kolkata", sp_code: "404" },
+  US: { timezone: "America/New_York", sp_code: "310260", hosts: GLOBAL_BASE_URLS },
+  GB: { timezone: "Europe/London", sp_code: "23430", hosts: GLOBAL_BASE_URLS },
+  DE: { timezone: "Europe/Berlin", sp_code: "26201", hosts: GLOBAL_BASE_URLS },
+  FR: { timezone: "Europe/Paris", sp_code: "20801", hosts: GLOBAL_BASE_URLS },
+  IN: { timezone: "Asia/Kolkata", sp_code: "404", hosts: INDIA_BASE_URLS },
 };
+const regionProfile = (c) => REGION_PROFILES[c?.config?.region || DEFAULT_REGION] || REGION_PROFILES[DEFAULT_REGION];
 const TRAP_MARKERS = [
   "notice.mp4",
   "1c7de0bd3393702d9191801f15f88f8d",
@@ -194,7 +200,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
   }
 
   async function rawRequest(c, method, endpoint, { params = {}, data = null, timeout = 15000, baseUrl } = {}) {
-    const base = (baseUrl || c.config?.baseUrl || DEFAULT_BASE_URL).replace(/\/$/, "");
+    const base = (baseUrl || c.config?.baseUrl || regionProfile(c).hosts[0] || DEFAULT_BASE_URL).replace(/\/$/, "");
     const parsedBase = validateRemoteUrl(base);
     const state = sessionState(c);
     const allParams = { host: parsedBase.hostname, ...params };
@@ -300,8 +306,9 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       return await rawRequest(c, method, endpoint, options);
     } catch (err) {
       if (c.config?.baseUrl) throw err;
-      for (const fallback of FALLBACK_BASE_URLS) {
-        if (fallback === DEFAULT_BASE_URL) continue;
+      const hosts = regionProfile(c).hosts;
+      for (const fallback of hosts) {
+        if (fallback === hosts[0]) continue;
         try {
           return await rawRequest(c, method, endpoint, { ...options, baseUrl: fallback });
         } catch {
@@ -372,8 +379,9 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       ["/wefeed-mobile-bff/user-api/check-sms-code", { ...base, type: 2, verificationCode: otp }],
       ["/wefeed-mobile-bff/user-api/login", { ...base, type: 0, smsCode: otp }],
     ];
-    let last = null;
+    const diag = [];
     for (const [endpoint, payload] of attempts) {
+      const field = payload.verificationCode !== undefined ? "verificationCode" : "smsCode";
       const res = await rawRequest(c, "POST", endpoint, { data: payload }).catch((err) => ({ _err: err }));
       if (res && !res._err && [0, 200].includes(res.code) && res.data?.token) {
         return {
@@ -386,9 +394,10 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
           },
         };
       }
-      if (res && !res._err) last = res;
+      const tag = `${endpoint.split("/").pop()}+${field}`;
+      diag.push(res && !res._err ? `${tag}: code=${res.code} msg=${res.msg || res.message || "?"}` : `${tag}: ${res?._err?.message || "request failed"}`);
     }
-    throw providerError(last?.msg || last?.message || "MovieBox rejected this verification code.", 401);
+    throw providerError(`MovieBox rejected this verification code. [${diag.join(" | ")}]`, 401);
   }
 
   return { request, loginAccount, requestLoginCode, verifyLoginCode };
