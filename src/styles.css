@@ -2924,3 +2924,103 @@ input, select { min-height: 40px; padding: 9px 12px; border-radius: 8px; backgro
   .yt-hub .yt-search { order: 1; flex: 1 1 0; max-width: none; margin-left: 0; }
   .yt-hub .youtube-account { order: 2; }
 }
+
+/* ===================================================================
+   Player: YouTube-style full-screen layout and controls.
+   Always dark, regardless of the app theme.
+   =================================================================== */
+.player-modal { --yt-red: #ff0033; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; background: #000; color: #fff; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.player-modal::-webkit-scrollbar { display: none; }
+.player-modal .player-shell { min-height: 100dvh; position: relative; }
+.player-modal .video-stage { flex: 1 0 auto; height: 100dvh; max-height: none; min-height: 0; aspect-ratio: auto; background: #000; }
+.player-modal .sutro-player, .player-modal .tesplayer { height: 100%; }
+.player-modal .sutro-player .tesplayer-picture { height: 100%; max-height: none; min-height: 0; aspect-ratio: auto; }
+/* Top bar: title + close, fades with the controls */
+.player-modal .player-header { position: absolute; top: 0; left: 0; right: 0; z-index: 8; padding: 14px 18px 40px; background: linear-gradient(#000c, #0000); transition: opacity .2s; pointer-events: none; }
+.player-modal .player-header > * { pointer-events: auto; }
+.player-modal .player-header h2 { font-size: 17px; font-weight: 500; margin: 2px 0 0; color: #fff; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.player-modal .player-header .small-caps { font-size: 12px; color: #ffffffb3; letter-spacing: 0; text-transform: none; }
+.player-modal .player-header .icon-button { width: 40px; height: 40px; min-width: 40px; background: #0006; color: #fff; border: 0; border-radius: 50%; }
+.player-shell:has(.sutro-player:not(.controls-visible)) .player-header { opacity: 0; pointer-events: none; }
+.player-shell:has(.sutro-player:not(.controls-visible)) .player-header > * { pointer-events: none; }
+/* Footer only appears for the "Up next" prompt, floating above the controls */
+.player-modal .player-footer { display: none; }
+.player-modal .player-footer.has-next { display: flex; position: absolute; right: 16px; bottom: 96px; z-index: 9; padding: 10px 12px; border-radius: 12px; background: #1c1c1ce6; border: 0; color: #fff; font-size: 13px; }
+.player-modal .player-footer.has-next > span:first-child { display: none; }
+.player-modal .player-episode-picker { background: #0f0f0f; padding: 16px 20px 28px; }
+.player-modal .player-error { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 9; margin: 0; max-width: min(520px, 90vw); background: #1c1c1ce6; border: 0; color: #fff; border-radius: 12px; }
+.player-modal .player-loading { color: #fff; background: #000; }
+.player-modal .player-loading > svg { color: #fff; }
+
+/* Overlay: dim slightly while controls show, centre cluster */
+.sutro-player .tesplayer-overlay { padding-bottom: 0; transition: background .2s; }
+.sutro-player.controls-visible .tesplayer-overlay { background: #0000004d; }
+.tesplayer-center-controls { display: flex; align-items: center; gap: clamp(28px, 7vw, 84px); }
+.sutro-player .tesplayer-big-play { width: 68px; height: 68px; background: #0000008c; border: 0; }
+.sutro-player .tesplayer-big-play .sutro-icon { width: 40px; height: 40px; stroke-width: 1.4; }
+.tesplayer-skip { position: relative; display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%; background: #0000008c; color: #fff; cursor: pointer; pointer-events: auto; }
+.tesplayer-skip svg { width: 30px; height: 30px; stroke-width: 1.6; }
+.tesplayer-skip span { position: absolute; font-size: 10px; font-weight: 700; padding-top: 2px; }
+.sutro-player .tesplayer-overlay > span { background: #000000a6; }
+
+/* Bottom bar */
+.sutro-player .tesplayer-controls { padding: 48px 12px 6px; background: linear-gradient(transparent, #000000b3 70%); }
+.sutro-player .tesplayer-timeline { min-height: 16px; padding: 0 6px; }
+.sutro-player .tesplayer-timeline input { -webkit-appearance: none; appearance: none; height: 18px; margin: 0; background: transparent; cursor: pointer; }
+.sutro-player .tesplayer-timeline input::-webkit-slider-runnable-track { height: 3px; border-radius: 0; background: linear-gradient(to right, var(--yt-red, #ff0033) var(--progress, 0%), #ffffff4d var(--progress, 0%)); transition: height .1s; }
+.sutro-player .tesplayer-timeline input:active::-webkit-slider-runnable-track, .sutro-player .tesplayer-timeline input:hover::-webkit-slider-runnable-track { height: 5px; }
+.sutro-player .tesplayer-timeline input::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%; background: var(--yt-red, #ff0033); border: 0; transform: scale(0); transition: transform .1s; }
+.sutro-player.controls-visible .tesplayer-timeline input::-webkit-slider-thumb { transform: scale(1); }
+.sutro-player .tesplayer-timeline input:active::-webkit-slider-thumb { transform: scale(1.3); }
+.sutro-player .tesplayer-timeline input::-moz-range-track { height: 3px; background: #ffffff4d; }
+.sutro-player .tesplayer-timeline input::-moz-range-progress { height: 3px; background: var(--yt-red, #ff0033); }
+.sutro-player .tesplayer-timeline input::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--yt-red, #ff0033); }
+.sutro-player .tesplayer-toolbar { margin-top: 0; min-height: 48px; }
+.sutro-player .tesplayer-primary-controls, .sutro-player .tesplayer-secondary-controls { display: flex; align-items: center; gap: 2px; }
+.sutro-player .icon-button { width: 46px; min-width: 46px; height: 46px; opacity: .95; }
+.sutro-player .icon-button svg, .sutro-player .icon-button .sutro-icon { width: 26px; height: 26px; }
+.sutro-player .icon-button.active { color: #fff; box-shadow: inset 0 -3px 0 -1px var(--yt-red, #ff0033); }
+.sutro-player .tesplayer-volume { -webkit-appearance: none; appearance: none; width: 64px; height: 18px; margin: 0 10px 0 2px; background: transparent; }
+.sutro-player .tesplayer-volume::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(to right, #fff var(--progress, 100%), #ffffff4d var(--progress, 100%)); }
+.sutro-player .tesplayer-volume::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px; border-radius: 50%; background: #fff; border: 0; }
+.tesplayer-time { font-size: 13px; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0 6px; }
+.tesplayer-time.live { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; }
+.tesplayer-time.live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--yt-red, #ff0033); }
+.sutro-player .tesplayer-captions { bottom: 24px; transition: bottom .2s; }
+.sutro-player.controls-visible .tesplayer-captions { bottom: 104px; }
+
+/* Settings / subtitle / audio menus: dark rounded sheet like YouTube */
+.tesplayer-settings { right: 12px; bottom: calc(var(--player-controls-height, 100px) + 6px); min-width: 280px; max-width: min(340px, calc(100% - 24px)); max-height: calc(100% - var(--player-controls-height, 100px) - 70px); overflow-y: auto; padding: 8px 0; gap: 0; border-radius: 12px; background: #1c1c1cf2; color: #fff; border: 0; box-shadow: 0 6px 24px #0008; }
+.tesplayer-settings > strong { padding: 8px 16px 10px; font-size: 14px; border-bottom: 1px solid #ffffff1a; margin-bottom: 4px; }
+.player-menu-row, .tesplayer-settings .player-setting-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; padding: 0 16px; background: none; border: 0; color: #fff; font-size: 14px; text-align: left; cursor: pointer; }
+.player-menu-row:hover, .tesplayer-settings .player-setting-row:hover { background: #ffffff1a; }
+.player-menu-row span { flex: 1; }
+.player-menu-row em { font-style: normal; color: #ffffffb3; font-size: 13px; }
+.tesplayer-settings .player-setting-row > span { display: flex; align-items: center; gap: 14px; flex: 1; }
+.tesplayer-settings .player-choice { background: none; border: 0; color: #ffffffb3; padding: 6px 0; font-size: 13px; }
+.tesplayer-settings .player-choice[aria-pressed=true] { color: #fff; font-weight: 600; }
+.tesplayer-settings .player-choice[aria-pressed=true]::before { content: '✓'; margin-right: 10px; }
+.tesplayer-settings.subtitle-choices .player-choice { width: 100%; min-height: 42px; padding: 0 16px; text-align: left; color: #fff; }
+.tesplayer-settings.subtitle-choices .player-choice:hover { background: #ffffff1a; }
+.tesplayer-settings.subtitle-choices p { padding: 6px 16px; color: #ffffffb3; }
+.tesplayer-settings .player-stepper { gap: 8px; }
+.tesplayer-settings .player-stepper button { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 50%; background: #ffffff1a; border: 0; }
+.tesplayer-settings .text-button { padding: 0 16px; min-height: 40px; width: 100%; color: #fff; font-size: 13px; }
+.tesplayer-settings .text-button:hover { background: #ffffff1a; }
+
+@media (max-width: 700px) {
+  .sutro-player .icon-button { width: 40px; min-width: 40px; height: 40px; }
+  .sutro-player .tesplayer-volume { display: none !important; }
+  .tesplayer-center-controls { gap: 32px; }
+  .player-modal .player-footer.has-next { left: 12px; right: 12px; bottom: 90px; }
+}
+
+/* Player fixes: real icon sizes (artwork is inset in a 32-unit box) and borderless sliders */
+.sutro-player .icon-button .sutro-icon { width: 46px; height: 46px; stroke-width: 1.25; }
+.sutro-player .sutro-play, .sutro-player .sutro-pause { fill: currentColor; }
+.sutro-player .tesplayer-big-play .sutro-icon { width: 76px; height: 76px; stroke-width: 1; }
+.tesplayer-skip svg { width: 32px; height: 32px; }
+.sutro-player .tesplayer-timeline input, .sutro-player .tesplayer-volume { border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; outline-offset: 4px; background: transparent; }
+.sutro-player .tesplayer-timeline input { width: 100%; }
+.sutro-player .tesplayer-volume { width: 64px; flex: none; }
+.sutro-player .tesplayer-timeline input:focus-visible, .sutro-player .tesplayer-volume:focus-visible { outline: 2px solid #fff; }

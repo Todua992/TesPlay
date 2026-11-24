@@ -5,7 +5,7 @@ import SutroIcon from "./SutroIcon";
 import LiveIndicator from "./LiveIndicator";
 import { Modal } from "./components";
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle, Radio, ChevronRight, ChevronLeft, Captions, Minus, Plus, Gauge, Languages, SkipBack, SkipForward } from 'lucide-react';
+import { LoaderCircle, Radio, ChevronRight, ChevronLeft, Captions, Minus, Plus, Gauge, Languages, SkipBack, SkipForward, RotateCcw, RotateCw } from 'lucide-react';
 import { createTesPlayerEngine, probeMediaCapabilities, parseSubtitles, activeCuesAt } from '@canvas-stream-player/player';
 import { DEFAULT_PLAYER_POLICY } from '@canvas-stream-player/contracts';
 import type { PlayerEngine, PlayerSnapshot, PlayerCommand, PlayerSubtitleCue } from '@canvas-stream-player/contracts';
@@ -56,7 +56,8 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
   const [fullscreen,setFullscreen]=useState(false),[immersive,setImmersive]=useState(false),[settings,setSettings]=useState(false),[pasteCaptions,setPasteCaptions]=useState(false),[captionText,setCaptionText]=useState('');
   const [controlsVisible,setControlsVisible]=useState(true),[seekFeedback,setSeekFeedback]=useState<{side:'left'|'right';seconds:number;key:number}|null>(null);
   const hideTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),feedbackTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),lastTap=useRef<{time:number;side:string}>({time:0,side:''}),lastTouchSeek=useRef(0);
-  const reveal=()=>{setControlsVisible(true);clearTimeout(hideTimer.current);hideTimer.current=setTimeout(()=>setControlsVisible(false),2500);};
+  const reveal=()=>{setControlsVisible(true);clearTimeout(hideTimer.current);hideTimer.current=setTimeout(()=>setControlsVisible(false),3000);};
+  const hideControls=()=>{clearTimeout(hideTimer.current);setControlsVisible(false);};
   useEffect(()=>{const changed=()=>setFullscreen(document.fullscreenElement===surface.current);document.addEventListener('fullscreenchange',changed);return()=>{document.removeEventListener('fullscreenchange',changed);clearTimeout(hideTimer.current);clearTimeout(feedbackTimer.current);};},[]);
   useEffect(()=>{if(snapshot?.phase==='playing')reveal();},[snapshot?.phase]);
   const toggleFullscreen=()=>{
@@ -215,8 +216,11 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
     clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setSeekFeedback(null),850);reveal();
   };
   const tap=(side:'left'|'right',pointerType:string)=>{
-    reveal();if(pointerType==='mouse')return;
-    const now=performance.now();if(lastTap.current.side===side && now-lastTap.current.time<350){lastTouchSeek.current=now;skip(side);lastTap.current={time:0,side:''};}else lastTap.current={time:now,side};
+    const now=performance.now();
+    if(pointerType!=='mouse' && lastTap.current.side===side && now-lastTap.current.time<300){lastTouchSeek.current=now;skip(side);lastTap.current={time:0,side:''};return;}
+    lastTap.current={time:now,side};
+    // Like YouTube: a single tap shows the controls, a second tap hides them. It never pauses.
+    if(controlsVisible)hideControls();else reveal();
   };
   const chooseSubtitle=async(trackId:string|null)=>{
     const track=snapshot?.subtitleTracks.find(s=>s.id===trackId);setLocalCaptions(false);setSubtitleMenu(false);
@@ -228,7 +232,7 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
   const audioUnlockRequired = !!snapshot && snapshot.audioTracks.length > 0 && !snapshot.audioUnlocked;
   const showControls=controlsVisible || snapshot?.phase!=='playing' || audioUnlockRequired || busy || settings || subtitleMenu || audioMenu;
   const captions = localCaptions ? activeCuesAt(localCues, position) : snapshot?.activeSubtitleCues || [];
-  return <div ref={surface} className={`tesplayer sutro-player ${immersive?'immersive':''} ${!remoteOnly&&showControls?'controls-visible':''}`} aria-label="TesPlayer" onPointerMove={remoteOnly?undefined:reveal} onKeyDownCapture={event=>{if(remoteOnly)return;reveal();if(event.key==='Escape' && immersive){event.preventDefault();event.stopPropagation();setImmersive(false);}}} onKeyDown={(event) => {
+  return <div ref={surface} className={`tesplayer sutro-player ${immersive?'immersive':''} ${!remoteOnly&&showControls?'controls-visible':''}`} aria-label="TesPlayer" onPointerMove={remoteOnly?undefined:event=>{if(event.pointerType==='mouse')reveal();}} onKeyDownCapture={event=>{if(remoteOnly)return;reveal();if(event.key==='Escape' && immersive){event.preventDefault();event.stopPropagation();setImmersive(false);}}} onKeyDown={(event) => {
     if(remoteOnly)return;
     if (!(event.target instanceof HTMLElement) || event.target.closest('input, select, button')) return;
     if(event.key==='Escape' && immersive){event.stopPropagation();setImmersive(false);return;}
@@ -247,7 +251,7 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
         {busy?<LoaderCircle className="spin" size={32}/>:audioUnlockRequired?<button className="button primary" onClick={()=>void toggle()}>Enable sound</button>:null}
         <span role="status">{busy?message:audioUnlockRequired?'Tap once to enable picture and sound. Then use your phone.':failed?'Choose another title on your phone.':'Paused · Use your phone to resume.'}</span>
       </div>) : (busy || snapshot?.phase !== 'playing' || showControls) && <div className="tesplayer-overlay">
-        {busy ? <LoaderCircle className="spin" size={32} /> : failed ? <button className="button primary" onClick={() => { reportError.current('');retries.current=0;freshRetry.current(); }}>Try again</button> : audioUnlockRequired ? <button className="button primary" onClick={() => {reveal();void toggle();}}>Enable playback on this screen</button> : <button className="tesplayer-big-play" onClick={() => {reveal();void toggle();}} aria-label={snapshot?.phase === 'playing' ? 'Pause video' : snapshot?.phase === 'ended' ? 'Play again' : 'Play video'}><SutroIcon name={snapshot?.phase==='playing'?'pause':'play'}/></button>}
+        {busy ? <LoaderCircle className="spin" size={32} /> : failed ? <button className="button primary" onClick={() => { reportError.current('');retries.current=0;freshRetry.current(); }}>Try again</button> : audioUnlockRequired ? <button className="button primary" onClick={() => {reveal();void toggle();}}>Enable playback on this screen</button> : <div className="tesplayer-center-controls">{!isLive&&end>start&&<button className="tesplayer-skip" aria-label="Back 10 seconds" onClick={()=>skip('left')}><RotateCcw/><span>10</span></button>}<button className="tesplayer-big-play" onClick={() => {reveal();void toggle();}} aria-label={snapshot?.phase === 'playing' ? 'Pause video' : snapshot?.phase === 'ended' ? 'Play again' : 'Play video'}><SutroIcon name={snapshot?.phase==='playing'?'pause':'play'}/></button>{!isLive&&end>start&&<button className="tesplayer-skip" aria-label="Forward 10 seconds" onClick={()=>skip('right')}><RotateCw/><span>10</span></button>}</div>}
         {(snapshot?.phase!=='playing' || audioUnlockRequired)&&<span role="status">{audioUnlockRequired ? 'Your phone is ready. Tap once here to start picture and sound.' : message}</span>}
       </div>}
       {captions.length > 0 && <div className="tesplayer-captions" aria-live="off">{captions.map((cue, index) => <span key={`${cue.id}-${index}`}>{cue.text}</span>)}</div>}
@@ -255,21 +259,20 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
       <div className="tesplayer-timeline">
         {isLive ? <LiveIndicator playing={snapshot?.phase === 'playing'} /> : <>
           <input aria-label="Seek playback" type="range" min={start} max={Math.max(start, end)} step="0.1" value={scrub ?? Math.min(end, position)} disabled={!snapshot || end <= start || busy} onChange={(e) => setScrub(Number(e.target.value))} onPointerUp={(e) => seek(Number(e.currentTarget.value))} onKeyUp={(e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) seek(Number(e.currentTarget.value)); }} style={{ '--progress': `${end > start ? ((scrub ?? position) - start) / (end - start) * 100 : 0}%` } as React.CSSProperties} />
-          <span>{`${time(scrub ?? position)} / ${time(snapshot?.durationSeconds || 0)}`}</span>
         </>}
       </div>
       <div className="tesplayer-toolbar">
         <div className="tesplayer-primary-controls">
-          <button className="icon-button" aria-label="Previous episode or video" title={previous?`Previous: ${previous.title}`:'No previous item'} disabled={!previous||!onNavigate} onClick={()=>{if(previous)onNavigate?.(previous);}}><SkipBack size={22}/></button>
+          {previous&&onNavigate&&<button className="icon-button" aria-label="Previous episode or video" title={`Previous: ${previous.title}`} onClick={()=>onNavigate(previous)}><SkipBack size={22} fill="currentColor"/></button>}
           <button className="icon-button tesplayer-play" aria-label={snapshot?.phase === 'playing' ? 'Pause' : 'Play'} disabled={!snapshot || busy || failed} onClick={() => void toggle()}><SutroIcon name={snapshot?.phase==='playing'?'pause':'play'}/></button>
-          <button className="icon-button" aria-label="Next episode or video" title={next?`Next: ${next.title}`:'No next item'} disabled={!next||!onNavigate} onClick={()=>{if(next)onNavigate?.(next);}}><SkipForward size={22}/></button>
+          {next&&onNavigate&&<button className="icon-button" aria-label="Next episode or video" title={`Next: ${next.title}`} onClick={()=>onNavigate(next)}><SkipForward size={22} fill="currentColor"/></button>}
           <button className="icon-button" aria-label={snapshot?.muted ? 'Unmute' : 'Mute'} disabled={!snapshot} onClick={() => void dispatch({ type: 'set-muted', muted: !snapshot?.muted })}><SutroIcon name={snapshot?.muted?'muted':'sound'}/></button>
-          <input className="tesplayer-volume" aria-label="Volume" type="range" min="0" max="1" step="0.05" value={snapshot?.volume ?? 1} disabled={!snapshot} onChange={(e) => void dispatch({ type: 'set-volume', volume: Number(e.target.value) })} />
+          <input className="tesplayer-volume" aria-label="Volume" type="range" min="0" max="1" step="0.05" value={snapshot?.volume ?? 1} disabled={!snapshot} onChange={(e) => void dispatch({ type: 'set-volume', volume: Number(e.target.value) })} style={{ '--progress': `${(snapshot?.muted ? 0 : snapshot?.volume ?? 1) * 100}%` } as React.CSSProperties} />
+          {isLive ? <span className="tesplayer-time live">LIVE</span> : <span className="tesplayer-time">{`${time(scrub ?? position)} / ${time(snapshot?.durationSeconds || 0)}`}</span>}
         </div>
         <div className="tesplayer-secondary-controls">
           {canTranscode&&<button className={`player-mode-toggle ${!plexCompatibility?'enabled':''}`} role="switch" aria-checked={!plexCompatibility} aria-label="Auto playback" title={plexCompatibility?'Compatibility mode':'Automatic playback'} onClick={()=>onCompatibilityChange(!plexCompatibility)}><span className="toggle-track"><i/></span><span>{plexCompatibility?'Compatibility':'Auto'}</span></button>}
           <button className={`icon-button ${localCaptions||snapshot?.selectedSubtitleTrackId?'active':''}`} aria-label="Choose subtitles" aria-expanded={subtitleMenu} disabled={!snapshot} onClick={subtitleToggle}><Captions size={22}/></button>
-          <button className={`icon-button ${audioMenu?'active':''}`} aria-label="Choose audio track" aria-expanded={audioMenu} disabled={!snapshot} onClick={()=>{setAudioMenu(open=>!open);setSubtitleMenu(false);setSettings(false);}}><Languages size={22}/></button>
           <button className="icon-button" aria-label="Player settings" aria-expanded={settings} onClick={()=>{setSettings(value=>!value);setSubtitleMenu(false);setAudioMenu(false);}}><SutroIcon name="settings"/></button>
           <button className="icon-button" aria-label={fullscreen||immersive?'Exit fullscreen':'Fullscreen video'} aria-pressed={fullscreen||immersive} onClick={toggleFullscreen}><SutroIcon name={fullscreen||immersive?'exitFullscreen':'fullscreen'}/></button>
         </div>
@@ -277,10 +280,10 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
       <div className="tesplayer-meta"><span><i /> TESPLAYER</span><span>{snapshot?.phase === 'playing' ? 'Playing' : snapshot?.phase === 'paused' ? 'Paused' : snapshot?.phase === 'ended' ? 'Finished' : snapshot?.isLive ? 'Live stream' : 'Ready to watch'}</span></div>
     </div>}
       {!remoteOnly&&settings&&<div className="tesplayer-settings" role="dialog" aria-label="Player settings">
-          <div className="player-settings-heading"><strong>Settings</strong><button className="text-button" aria-label="Close player settings" onClick={()=>setSettings(false)}>Close</button></div>
-          <div className="player-setting-row"><span>Quality</span><button className="player-choice" aria-label="Cycle video quality" disabled={!qualities.length||busy} onClick={cycleQuality}><Gauge size={18}/>{snapshot?.qualities.find(q=>q.id===snapshot.selectedQualityId)?.label||'Auto'}</button></div>
-          <div className="player-setting-row"><span>Speed</span><div className="player-stepper"><button aria-label="Decrease playback speed" disabled={!snapshot||snapshot.isLive||busy||(snapshot.playbackRate||1)<=.25} onClick={()=>void dispatch({type:'set-rate',rate:Math.max(.25,(snapshot?.playbackRate||1)-.25)})}><Minus size={18}/></button><output>{snapshot?.playbackRate||1}×</output><button aria-label="Increase playback speed" disabled={!snapshot||snapshot.isLive||busy||(snapshot.playbackRate||1)>=2} onClick={()=>void dispatch({type:'set-rate',rate:Math.min(2,(snapshot?.playbackRate||1)+.25)})}><Plus size={18}/></button></div></div>
-          {(snapshot?.audioTracks.length||0)>1&&<div className="player-setting-row"><span>Audio</span><div className="player-track-choices">{snapshot?.audioTracks.map(track=><button className="player-choice" aria-pressed={snapshot.selectedAudioTrackId===track.id} key={track.id} disabled={busy} onClick={()=>void dispatch({type:'select-audio-track',trackId:track.id})}><Languages size={16}/>{track.label}</button>)}</div></div>}
+          <button className="player-menu-row" onClick={()=>{setSubtitleMenu(true);setSettings(false);}}><Captions size={18}/><span>Subtitles</span><em>{localCaptions?'Yours':snapshot?.subtitleTracks.find(t=>t.id===snapshot?.selectedSubtitleTrackId)?.label||'Off'}</em><ChevronRight size={16}/></button>
+          {(snapshot?.audioTracks.length||0)>1&&<button className="player-menu-row" onClick={()=>{setAudioMenu(true);setSettings(false);}}><Languages size={18}/><span>Audio</span><em>{snapshot?.audioTracks.find(t=>t.id===snapshot?.selectedAudioTrackId)?.label||'Default'}</em><ChevronRight size={16}/></button>}
+          <div className="player-setting-row"><span><Gauge size={18}/>Quality</span><button className="player-choice" aria-label="Cycle video quality" disabled={!qualities.length||busy} onClick={cycleQuality}>{snapshot?.qualities.find(q=>q.id===snapshot.selectedQualityId)?.label||'Auto'}</button></div>
+          <div className="player-setting-row"><span>Playback speed</span><div className="player-stepper"><button aria-label="Decrease playback speed" disabled={!snapshot||snapshot.isLive||busy||(snapshot.playbackRate||1)<=.25} onClick={()=>void dispatch({type:'set-rate',rate:Math.max(.25,(snapshot?.playbackRate||1)-.25)})}><Minus size={18}/></button><output>{snapshot?.playbackRate||1}×</output><button aria-label="Increase playback speed" disabled={!snapshot||snapshot.isLive||busy||(snapshot.playbackRate||1)>=2} onClick={()=>void dispatch({type:'set-rate',rate:Math.min(2,(snapshot?.playbackRate||1)+.25)})}><Plus size={18}/></button></div></div>
           <button className="text-button" onClick={()=>{setPasteCaptions(true);setSettings(false);}}>Paste subtitles</button>
           <button className="text-button" disabled={!snapshot} onClick={()=>void dispatch({type:'set-rotation',degrees:(((snapshot?.rotationDegrees||0)+90)%360) as 0|90|180|270})}>Rotate picture</button>
           <button className="text-button" disabled={!snapshot} onClick={()=>void dispatch({type:'set-aspect-mode',mode:snapshot?.aspectMode==='fill'?'fit':'fill'})}>{snapshot?.aspectMode==='fill'?'Fit picture':'Fill picture'}</button>

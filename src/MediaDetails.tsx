@@ -1,5 +1,5 @@
 import { useEffect, useId, useReducer, useRef, useState } from 'react';
-import { Play, Plus, Check, X, Film, Volume2, Captions, Monitor } from 'lucide-react';
+import { Play, Plus, Check, X, Film, Volume2, Captions, Monitor, RotateCcw } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { episodesPath, type EpisodeCatalog } from './episodes';
 import { Busy, Modal } from './components';
@@ -24,7 +24,7 @@ function timeLabel(seconds: number) {
     : `${minutes}:${String(time % 60).padStart(2, '0')}`;
 }
 
-export default function MediaDetails({ item, onClose, onPlay, onFavorite, saved, isPlex }: {
+function LibraryDetails({ item, onClose, onPlay, onFavorite, saved, isPlex }: {
   item: MediaItem;
   onClose: () => void;
   onPlay: (item: MediaItem, settings: PlaybackSettings) => void;
@@ -192,4 +192,56 @@ export default function MediaDetails({ item, onClose, onPlay, onFavorite, saved,
     </div></div>
     <footer className="media-details-phone-footer">{footer}</footer>
   </Modal>;
+}
+
+type DetailsProps = Parameters<typeof LibraryDetails>[0];
+
+function relativeDate(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days < 1) return 'Today';
+  if (days < 2) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} week${days < 14 ? '' : 's'} ago`;
+  if (days < 365) return `${Math.floor(days / 30)} month${days < 60 ? '' : 's'} ago`;
+  return `${Math.floor(days / 365)} year${days < 730 ? '' : 's'} ago`;
+}
+
+/** YouTube videos open instantly: no stream lookup, just the video, its channel and actions. */
+function YouTubeDetails({ item, onClose, onPlay, onFavorite, saved }: DetailsProps) {
+  const [expanded, setExpanded] = useState(false);
+  const resume = item.resumeSeconds || 0;
+  const hasResume = resume > 0 && (!item.duration || resume / item.duration < .97);
+  const meta = [item.subtitle, relativeDate(item.publishedAt)].filter(Boolean);
+  const description = item.description?.trim() || '';
+  return <Modal title={item.title} onClose={onClose} wide className="yt-details-modal" header={<span hidden />}>
+    <button type="button" className="yt-details-close" onClick={onClose} aria-label="Close dialog"><X size={20} /></button>
+    <div className="yt-details">
+      <button type="button" className="yt-details-thumb" onClick={() => onPlay(item, {})} aria-label={`Play ${item.title}`}>
+        {item.poster ? <img src={item.backdrop || item.poster} alt="" /> : <span className="yt-details-thumb-empty"><Film size={36} /></span>}
+        <span className="yt-details-play"><Play size={30} fill="currentColor" /></span>
+        {!!item.duration && <span className="yt-details-duration">{timeLabel(item.duration)}</span>}
+        {hasResume && !!item.duration && <span className="yt-details-progress"><i style={{ width: `${Math.min(100, resume / item.duration * 100)}%` }} /></span>}
+      </button>
+      <div className="yt-details-info">
+        <h2>{item.title}</h2>
+        {meta.length > 0 && <p className="yt-details-meta">{meta.join(' · ')}</p>}
+        <div className="yt-details-actions">
+          <button type="button" className="button primary" onClick={() => onPlay(item, {})}><Play size={16} fill="currentColor" />{hasResume ? `Resume from ${timeLabel(resume)}` : 'Play'}</button>
+          {hasResume && <button type="button" className="button ghost" onClick={() => onPlay(item, { startOver: true })}><RotateCcw size={16} />From start</button>}
+          <button type="button" className="button ghost" onClick={() => onFavorite(item)} aria-pressed={saved}>{saved ? <Check size={16} /> : <Plus size={16} />}{saved ? 'Saved' : 'Save'}</button>
+        </div>
+        {description && <div className={`yt-details-description${expanded ? ' expanded' : ''}`}>
+          <p>{description}</p>
+          {description.length > 220 && <button type="button" className="text-button" onClick={() => setExpanded(value => !value)}>{expanded ? 'Show less' : '…more'}</button>}
+        </div>}
+      </div>
+    </div>
+  </Modal>;
+}
+
+export default function MediaDetails(props: DetailsProps) {
+  return props.item.providerType === 'youtube' && props.item.type === 'video' ? <YouTubeDetails {...props} /> : <LibraryDetails {...props} />;
 }

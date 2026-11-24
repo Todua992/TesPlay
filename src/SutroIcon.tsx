@@ -1,6 +1,6 @@
 // SVG artwork adapted from muxinc/player.style/themes/sutro (MIT).
 export default function SutroIcon({name}:{name:'play'|'pause'|'sound'|'muted'|'settings'|'fullscreen'|'exitFullscreen'}) {
-  return <svg viewBox="0 0 32 32" aria-hidden="true" className="sutro-icon">{name==='play'&&<><path
+  return <svg viewBox="0 0 32 32" aria-hidden="true" className={`sutro-icon sutro-${name}`}>{name==='play'&&<><path
             d="M20.7131 14.6976C21.7208 15.2735 21.7208 16.7265 20.7131 17.3024L12.7442 21.856C11.7442 22.4274 10.5 21.7054 10.5 20.5536L10.5 11.4464C10.5 10.2946 11.7442 9.57257 12.7442 10.144L20.7131 14.6976Z"
           /></>}{name==='sound'&&<><path
             d="M16.5 20.486v-8.972c0-1.537-2.037-2.08-2.802-.745l-1.026 1.79a2.5 2.5 0 0 1-.8.85l-1.194.78A1.5 1.5 0 0 0 10 15.446v1.11c0 .506.255.978.678 1.255l1.194.782a2.5 2.5 0 0 1 .8.849l1.026 1.79c.765 1.334 2.802.792 2.802-.745Z"

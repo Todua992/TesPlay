@@ -47,9 +47,10 @@ export default function Navigation({ view, phone, signedIn, searchOpen, profileO
       <button type="button" className="topbar-brand" aria-label="TesPlay home" onClick={() => onNavigate('home')}><Brand /></button>
       <span className="topbar-divider" aria-hidden="true" />
       <h1 className="topbar-title">{titles[view] ?? ''}</h1>
-      <button type="button" className="topbar-search" aria-label="Search library" aria-expanded={searchOpen} onClick={onSearch}>
+      {/* YouTube has its own search bar on the page, so the library search would be a duplicate there. */}
+      {view !== 'apps' && <button type="button" className="topbar-search" aria-label="Search library" aria-expanded={searchOpen} onClick={onSearch}>
         <span>Search movies, series, channels…</span><Search aria-hidden="true" />
-      </button>
+      </button>}
       <div className="topbar-actions">
         {phone && <button type="button" className="topbar-icon" aria-label="Open remote controls" title="Phone remote" onClick={onRemote}><Smartphone aria-hidden="true" /></button>}
         <button type="button" className="topbar-icon topbar-user" aria-haspopup="dialog" aria-expanded={profileOpen} aria-label={signedIn ? 'Profiles and account' : 'Sign in'} title={signedIn ? 'Profiles and account' : 'Sign in'} onClick={() => (signedIn ? onProfile() : onSignIn())}>
