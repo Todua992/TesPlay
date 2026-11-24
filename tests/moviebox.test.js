@@ -78,7 +78,7 @@ test("session helpers decode the JWT and pick the session out of a login respons
   assert.match(openUdidFor({ id: "a" }), /^[0-9a-f]{32}$/);
 });
 
-test("code login: get a code, stay pending until approved, then register the device", async () => {
+test("code login: get a code, stay pending until approved", async () => {
   const token = jwt(7, "devtok", inDays(30));
   let polls = 0;
   const api = fakeApi({
@@ -90,7 +90,6 @@ test("code login: get a code, stay pending until approved, then register the dev
       polls += 1;
       return polls < 2 ? { code: 0, msg: "waiting" } : { code: 1, data: { uid_v2: token, username: "luka", isvip: 1 } };
     },
-    Device_v3: (p) => (assert.equal(p.uid, token), { code: 1 }),
   });
   const client = createMovieBoxClient({ fetchImpl: api.fetchImpl });
   assert.deepEqual(await client.startCodeLogin(conn()), { code: "AB12CD34" });
@@ -99,7 +98,7 @@ test("code login: get a code, stay pending until approved, then register the dev
   assert.equal(approved.status, "approved");
   assert.equal(approved.session.uid, token);
   assert.equal(approved.session.user.vip, true);
-  assert.deepEqual(api.calls.map((c) => c.module), ["Add_captcha", "Login_captcha_v2", "Login_captcha_v2", "Device_v3"]);
+  assert.deepEqual(api.calls.map((c) => c.module), ["Add_captcha", "Login_captcha_v2", "Login_captcha_v2"]);
 });
 
 test("code login reports a full device list and rejects malformed codes", async () => {
@@ -264,38 +263,32 @@ test("home feed falls back past rejected modules and never fails the page", asyn
   assert.deepEqual(empty.shelves, []);
 });
 
-test("an empty stream list re-registers the device and explains what came back", async () => {
+test("an empty stream list tries each server group and explains what came back", async () => {
   const token = jwt(9, "tok9", inDays(30));
   const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
   const { svc, calls } = service({
-    Movie_downloadurl_v3: () => ({ code: 1, msg: "success", data: { seconds: 0, quality: ["1080p"], ip: "x", list: [{ fid: 1, real_quality: "1080p", path: "" }, { fid: 2, real_quality: "4K", path: "", vip_only: 1 }] } }),
-    Device_v3: () => ({ code: 1, msg: "ok" }),
-    Device_list: () => ({ code: 1, data: { list: [{ open_udid: openUdidFor(signedIn), device_name: "TesPlay" }] } }),
+    Movie_downloadurl_v3: () => ({ code: 1, msg: "success", data: { seconds: 0, quality: ["4K", "1080p"], ip: "x", list: [] } }),
   });
   await assert.rejects(svc.resolvePlayback({}, signedIn, "11", "movie"), (e) => {
     assert.equal(e.status, 404);
-    assert.match(e.message, /list=2 withPath=0 vip=1/);
-    assert.match(e.message, /quality=\["1080p"\]/);
-    assert.match(e.message, /tried=app:1\/2 app\+token:1\/2 after-bind:1\/2 bind=1\/ok devices=1\/1 ours=yes/);
-    assert.doesNotMatch(e.message, /https?:/);
+    assert.match(e.message, /list=0 withPath=0 vip=0/);
+    assert.match(e.message, /quality=\["4K","1080p"\]/);
+    assert.match(e.message, /tried=auto:1\/0 empty:1\/0 none:1\/0/);
     return true;
   });
   const tries = calls.filter((c) => c.module === "Movie_downloadurl_v3");
-  assert.equal(tries.length, 3);
-  assert.equal(tries[1].open_udid, "tok9");
-  assert.equal(calls.filter((c) => c.module === "Device_v3").length, 1);
+  assert.deepEqual(tries.map((c) => [c.oss, c.group]), [["1", "AUTO"], ["1", ""], [undefined, undefined]]);
+  assert.ok(tries.every((c) => c.uid === token));
 });
 
-test("streams appear once the device is registered", async () => {
+test("stream lookup stops at the first server group that returns links", async () => {
   const token = jwt(9, "tok9", inDays(30));
   const signedIn = conn({ session: { uid: token, exp: inDays(30), user: {} } });
-  let bound = false;
-  const { svc, registered } = service({
-    Movie_downloadurl_v3: () => ({ code: 1, data: { list: bound ? [{ fid: 3, real_quality: "1080p", path: "https://cdn/m.mp4" }] : [] } }),
-    Device_v3: () => ((bound = true), { code: 1 }),
-    Device_list: () => ({ code: 1, data: [] }),
+  const { svc, calls, registered } = service({
+    Movie_downloadurl_v3: (p) => ({ code: 1, data: { list: p.group === "" ? [{ fid: 3, real_quality: "1080p", path: "https://cdn/m.mp4" }] : [] } }),
     Movie_srt_list_v3: () => ({ code: 1, data: { list: [] } }),
   });
   await svc.resolvePlayback({}, signedIn, "11", "movie");
+  assert.equal(calls.filter((c) => c.module === "Movie_downloadurl_v3").length, 2);
   assert.equal(registered[0].url, "https://cdn/m.mp4");
 });

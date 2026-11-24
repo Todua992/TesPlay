@@ -140,13 +140,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     if (res?.code !== 1) return { status: "pending" };
     const session = sessionFromLogin(res.data);
     if (!session) throw providerError("MovieBox Pro approved the code but returned no session.", 502);
-    // Register this device the way the official TV apps do; failures are non-fatal.
-    await registerDevice(c, session).catch(() => null);
     return { status: "approved", session };
-  }
-
-  function registerDevice(c, session) {
-    return call(c, "Device_v3", { device_name: "TesPlay", device_model: "TesPlay" }, { session });
   }
 
   // Renew a session that is close to expiring (User_token).
@@ -157,7 +151,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     return renewed ? { ...renewed, user: { ...session.user, ...Object.fromEntries(Object.entries(renewed.user).filter(([, v]) => v)) } } : null;
   }
 
-  return { call, startCodeLogin, pollCodeLogin, refreshSession, registerDevice };
+  return { call, startCodeLogin, pollCodeLogin, refreshSession };
 }
 
 // ---- catalogue mapping ------------------------------------------------------
@@ -373,38 +367,30 @@ export function createMovieBoxService({ client, art, media, cached, cacheKey, pe
     const params = isSeries
       ? { tid: parsed.id, season: String(parsed.season || 1), episode: String(parsed.episode || 1) }
       : { mid: parsed.id };
-    const tokenUdid = decodeSessionToken(session.uid)?.token;
     const tried = [];
-    const request = async (label, extra = {}) => {
-      const reply = await client.call(c, module, { ...params, oss: "1", group: "", ...extra }, { session })
+    const request = async (label, extra) => {
+      const reply = await client.call(c, module, { ...params, ...extra }, { session })
         .catch((e) => ({ code: "err", msg: e.message }));
       tried.push(`${label}:${reply?.code}/${listOf(reply?.data).length}`);
       return reply;
     };
     const playable = (reply) => reply?.code === 1 && rankStreams(listOf(reply.data)).length > 0;
-    let res = await request("app");
-    if (!playable(res) && tokenUdid) {
-      const retry = await request("app+token", { open_udid: tokenUdid });
-      if (playable(retry) || res?.code !== 1) res = retry;
-    }
-    // MovieBox Pro hands out links only to registered devices: if the list is
-    // still empty, (re)register this device and ask once more.
-    let device = "";
-    if (!playable(res)) {
-      const bind = await client.registerDevice(c, session).catch((e) => ({ code: "err", msg: e.message }));
-      device = `bind=${bind?.code}/${String(bind?.msg || "").slice(0, 40)}`;
-      if (bind?.code === 1) {
-        const again = await request("after-bind");
-        if (playable(again) || res?.code !== 1) res = again;
-      }
-      const devices = await client.call(c, "Device_list", {}, { session }).catch(() => null);
-      if (devices) {
-        const list = listOf(devices.data);
-        device += ` devices=${devices.code}/${list.length} ours=${JSON.stringify(devices.data ?? "").includes(openUdidFor(c)) ? "yes" : "no"}`;
-      }
+    // The file list depends on the download-server group: the website uses
+    // oss_group=AUTO, while old ShowBox clients sent an empty group. Try AUTO
+    // first, then the older shapes, and stop at the first playable list.
+    const shapes = [
+      ["auto", { oss: "1", group: "AUTO" }],
+      ["empty", { oss: "1", group: "" }],
+      ["none", {}],
+    ];
+    let res = null;
+    for (const [label, extra] of shapes) {
+      const reply = await request(label, extra);
+      if (!res || (res.code !== 1 && reply?.code === 1)) res = reply;
+      if (playable(reply)) { res = reply; break; }
     }
     if (res?.code !== 1) throw providerError(`${res?.msg || "MovieBox Pro could not load streams for this title."} [${tried.join(" ")}]`, 502);
-    res.tried = [tried.join(" "), device].filter(Boolean).join(" ");
+    res.tried = tried.join(" ");
     return { session, res, all: listOf(res.data), ranked: rankStreams(listOf(res.data)) };
   }
 
