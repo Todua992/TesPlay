@@ -50,6 +50,7 @@ const StremioSourcesDialog = lazy(() => import("./StremioSourcesDialog"));
 const MediaDetails = lazy(() => import("./MediaDetails"));
 const Player = lazy(() => import("./Player"));
 const YouTubeHub = lazy(() => import("./YouTube"));
+const MovieBoxHub = lazy(() => import("./MovieBox"));
 const Home = lazy(() => import("./Home"));
 const LibraryBrowser = lazy(() => import("./LibraryBrowser"));
 const GlobalSearch=lazy(()=>import("./GlobalSearch"));
@@ -64,6 +65,7 @@ type View =
   | "list"
   | "history"
   | "apps"
+  | "moviebox"
   | "connections"
   | "settings"
   | "remote"
@@ -81,6 +83,7 @@ function initialView(): View {
       "list",
       "history",
       "apps",
+      "moviebox",
       "connections",
       "settings",
       "remote",
@@ -423,7 +426,7 @@ export default function App() {
 
 
     setSearch("");
-    setView(c.type === "youtube" ? "apps" : "catalog");
+    setView(c.type === "youtube" ? "apps" : c.type === "moviebox" ? "moviebox" : "catalog");
     window.scrollTo({ top: 0 });
   }
   function connect(type?: string) {
@@ -778,6 +781,11 @@ export default function App() {
           <Suspense fallback={<Busy label="Loading YouTube…" />}>
             <YouTubeHub hideYouTubeShorts={hideYouTubeShorts} connections={connections} library={rawLibrary} onOpen={open} onFavorite={favorite}
               onConnect={() => connect(connections.some(c => c.type === "youtube") ? undefined : "youtube")} initialConnectionId={selectedConnection?.type === "youtube" ? selectedConnection.id : undefined} initialChannel={youtubeChannel} onStar={star} onClearQueue={()=>void updateQueue("clear").catch(e=>showToast(errorMessage(e)))} onRemoveQueue={item=>void updateQueue("remove",item).catch(e=>showToast(errorMessage(e)))} />
+          </Suspense>
+        )}
+        {view === "moviebox" && (
+          <Suspense fallback={<Busy label="Loading MovieBox Pro…" />}>
+            <MovieBoxHub connections={connections} library={rawLibrary} canManage={auth.user.canManageConnections ?? auth.user.role === "owner"} onDetails={inspect} onFavorite={favorite} onConnect={connect} onReloadConnections={refreshManagedConnections} />
           </Suspense>
         )}
         {view === "settings" && <Suspense fallback={<Busy label="Loading settings…"/>}><SettingsDashboard preferencesReady={preferencesReady} onHideYouTubeShorts={updateYouTubeShorts} onReloadPreferences={reloadPreferences} auth={auth} connections={connections} preferences={preferences} preferencesBusy={preferencesBusy} profileBusy={profileBusy} onAutoplay={updateAutoplay} onRemovedCurrent={reloadAuth} onReloadConnections={refreshManagedConnections} onBrowse={browse} onManageProfiles={()=>setProfileOpen(true)} onSwitchProfile={async id=>{

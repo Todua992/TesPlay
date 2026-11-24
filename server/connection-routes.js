@@ -9,6 +9,7 @@ const supportedConnections = [
   "local",
   "youtube",
   "stremio",
+  "moviebox",
 ];
 const editablePublicConfigFields = new Set([
   "clientId",
@@ -18,6 +19,7 @@ const editablePublicConfigFields = new Set([
   "transcode",
   "maxBitrate",
   "authMode",
+  "region",
 ]);
 
 export function validateConnection(value, existing) {

@@ -46,7 +46,7 @@ export type Connection = {
   name: string;
   createdAt: string;
   configured: boolean;
-  authMode?: "apiKey" | "oauth";
+  authMode?: "apiKey" | "oauth" | "account" | "guest";
   oauthAuthorized?: boolean;
   summary?: string;
   shared?: boolean;
@@ -76,7 +76,7 @@ export type StreamChoice = { id: string; label: string; description?: string; ad
 export type PlaybackOptions = { item?: MediaItem; audio: PlaybackChoice[]; subtitles: PlaybackChoice[]; qualities: PlaybackChoice[]; sources?: StreamChoice[]; note?: string };
 export type Playback = {
   defaults?: PlayerPreferences;
-  provider?: "plex" | "youtube" | "stremio";
+  provider?: "plex" | "youtube" | "stremio" | "moviebox";
   url: string;
   type: "hls" | "video" | "audio" | "external";
   streamKind?: "direct-file" | "continuous-ts" | "dual-input";

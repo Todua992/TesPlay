@@ -22,6 +22,6 @@ export async function searchConnection(c:Connection,query:string,request:Request
      catch(e){signal.throwIfAborted();return {id:c.id+':'+section.id,title:`${c.name} · ${section.title}`,connection:c,items:[],path:source,page:1,error:e instanceof Error?e.message:'This library could not be searched.'};}
    }));
  }
- const source=c.type==='youtube'?`/youtube/${c.id}/search?q=${encodeURIComponent(query)}`:path;
- return [{id:c.id,title:c.type==='youtube'?'YouTube':c.name,connection:c,...await request<Result>(source,signal),path:source,page:1}];
+ const source=c.type==='youtube'?`/youtube/${c.id}/search?q=${encodeURIComponent(query)}`:c.type==='moviebox'?`/moviebox/${c.id}/search?q=${encodeURIComponent(query)}`:path;
+ return [{id:c.id,title:c.type==='youtube'?'YouTube':c.type==='moviebox'?'MovieBox Pro':c.name,connection:c,...await request<Result>(source,signal),path:source,page:1}];
 }

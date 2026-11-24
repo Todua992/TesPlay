@@ -215,6 +215,11 @@ export default function ConnectionEditor({ adding, editing, editConfig, configur
               Choose your categories in the next step.
             </p>
           )}
+          {adding === "moviebox" && (
+            <p className="form-help">
+              Guest access works immediately without an account. Save to start browsing movies, series, and anime right away.
+            </p>
+          )}
           {editing && (
             <p className="form-help">
               Saved credentials stay hidden. Leave a saved field empty to
@@ -229,7 +234,7 @@ export default function ConnectionEditor({ adding, editing, editConfig, configur
               Connection name
               <input
                 name="name"
-                defaultValue={editing?.name || ""}
+                defaultValue={editing?.name || (adding === "moviebox" ? "MovieBox Pro" : "")}
                 required
                 placeholder={`My ${adding === "m3u" ? "playlist" : services.find((s) => s.id === adding)?.name || "library"}`}
                 maxLength={80}

@@ -1,8 +1,8 @@
-import { Bookmark, Cable, Clapperboard, History, House, Layers, Search, Settings, Smartphone, Tv, UserRound, Youtube } from 'lucide-react';
+import { Bookmark, Cable, Clapperboard, Film, History, House, Layers, Search, Settings, Smartphone, Tv, UserRound, Youtube } from 'lucide-react';
 import { Brand } from './components';
 import './navigation.css';
 
-type NavigationView = 'home' | 'live' | 'movies' | 'series' | 'apps' | 'list' | 'history' | 'connections' | 'settings' | 'remote';
+type NavigationView = 'home' | 'live' | 'movies' | 'series' | 'apps' | 'moviebox' | 'list' | 'history' | 'connections' | 'settings' | 'remote';
 type Props = {
   view: string;
   phone: boolean;
@@ -21,6 +21,7 @@ const destinations = [
   { view: 'live', label: 'Live TV', Icon: Tv },
   { view: 'movies', label: 'Movies', Icon: Clapperboard },
   { view: 'series', label: 'Series', Icon: Layers },
+  { view: 'moviebox', label: 'MovieBox', Icon: Film },
   { view: 'apps', label: 'YouTube', Icon: Youtube },
   { view: 'list', label: 'My List', Icon: Bookmark },
 ] as const;
@@ -32,7 +33,7 @@ const utilities = [
 ] as const;
 
 const titles: Record<string, string> = {
-  home: 'Home', live: 'Live TV', movies: 'Movies', series: 'Series', apps: 'YouTube', list: 'My List',
+  home: 'Home', live: 'Live TV', movies: 'Movies', series: 'Series', moviebox: 'MovieBox Pro', apps: 'YouTube', list: 'My List',
   history: 'History', connections: 'Sources', settings: 'Settings', remote: 'Remote', catalog: 'Library',
 };
 
@@ -47,8 +48,8 @@ export default function Navigation({ view, phone, signedIn, searchOpen, profileO
       <button type="button" className="topbar-brand" aria-label="TesPlay home" onClick={() => onNavigate('home')}><Brand /></button>
       <span className="topbar-divider" aria-hidden="true" />
       <h1 className="topbar-title">{titles[view] ?? ''}</h1>
-      {/* YouTube has its own search bar on the page, so the library search would be a duplicate there. */}
-      {view !== 'apps' && <button type="button" className="topbar-search" aria-label="Search library" aria-expanded={searchOpen} onClick={onSearch}>
+      {/* YouTube and MovieBox have their own search bars on the page, so the library search would be a duplicate there. */}
+      {!['apps', 'moviebox'].includes(view) && <button type="button" className="topbar-search" aria-label="Search library" aria-expanded={searchOpen} onClick={onSearch}>
         <span>Search movies, series, channels…</span><Search aria-hidden="true" />
       </button>}
       <div className="topbar-actions">

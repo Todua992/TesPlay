@@ -50,4 +50,13 @@ export const services = [
     description:
       "Connect your Stremio account, choose your addons and watch here with TesPlayer.",
   },
+  {
+    id: "moviebox",
+    name: "MovieBox Pro",
+    subtitle: "Movies, series & anime",
+    color: "#10b981",
+    letters: "M",
+    description:
+      "Stream movies, TV series and anime with instant guest access or your MovieBox account.",
+  },
 ];

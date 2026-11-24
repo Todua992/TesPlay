@@ -14,7 +14,7 @@ export default function Home({ cacheIdentity, connections, library: rawLibrary, 
   cacheIdentity:string; connections: Connection[]; library: Library; hideYouTubeShorts?: boolean; signedIn: boolean; query: string; connectionsReady: boolean; connectionsError: string; onReloadConnections: () => Promise<void>; canManage: boolean;
   onOpen: (item: MediaItem) => void; onFavorite: (item: MediaItem) => void; onDetails: (item: MediaItem) => void;
   onBrowse: (c: Connection, parent?: MediaItem, kind?: string, channel?: {id:string;title:string}, category?:string) => void; onConnect: (type?: string) => void;
-  onNavigate: (view: 'connections' | 'movies' | 'apps' | 'list') => void; onUnavailable: () => void;
+  onNavigate: (view: 'connections' | 'movies' | 'apps' | 'moviebox' | 'list') => void; onUnavailable: () => void;
 }) {
   const library = useMemo(() => filterLibraryForYouTubeVisibility(rawLibrary, hideYouTubeShorts, connections), [rawLibrary, hideYouTubeShorts, connections]);
   const [results, setResults] = useState<Record<string, HomeResult>>({});
@@ -102,9 +102,9 @@ export default function Home({ cacheIdentity, connections, library: rawLibrary, 
           <div className="section-heading"><h2>Your libraries</h2><div className="row-actions">{connected && <RefreshButton label="Refresh home libraries" disabled={pending.length > 0} onRefresh={() => setRefresh(value => value + 1)} />}<button className="text-button" onClick={() => onNavigate('connections')}>{canManage ? 'Manage connections' : 'Shared connections'} <ArrowUpRight size={16} /></button></div></div>
           <div className="service-rail">{services.filter(s => canManage || connections.some(c => c.type === s.id || s.id === 'xtream' && c.type === 'm3u')).map(s => {
             const c = connections.find(c => c.type === s.id || (s.id === 'xtream' && c.type === 'm3u'));
-            return <button key={s.id} className={`service-tile service-${s.id}`} onClick={() => s.id === 'crunchyroll' ? onUnavailable() : s.id === 'youtube' ? onNavigate('apps') : c ? onBrowse(c) : onConnect(s.id)}>
+            return <button key={s.id} className={`service-tile service-${s.id}`} onClick={() => s.id === 'crunchyroll' ? onUnavailable() : s.id === 'youtube' ? onNavigate('apps') : s.id === 'moviebox' && !c ? onNavigate('moviebox') : c ? onBrowse(c) : onConnect(s.id)}>
               <span className={`service-logo ${s.id}`} style={{ color: s.color }}>{s.id === 'youtube' ? <YouTubeLogo /> : s.letters}</span>
-              <span className="service-copy"><span className="service-label">{s.name}</span><span className="service-state">{s.id === 'crunchyroll' ? 'Unavailable' : c ? 'Connected' : s.id === 'youtube' ? 'Browse videos' : 'Connect'}</span></span>
+              <span className="service-copy"><span className="service-label">{s.name}</span><span className="service-state">{s.id === 'crunchyroll' ? 'Unavailable' : c ? 'Connected' : s.id === 'youtube' ? 'Browse videos' : s.id === 'moviebox' ? 'Browse catalog' : 'Connect'}</span></span>
               {c ? <Check size={16} /> : <ArrowUpRight size={16} />}
             </button>;
           })}</div>

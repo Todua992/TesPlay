@@ -79,6 +79,7 @@ const fields: Record<
       secret: true,
     },
   ],
+  moviebox: [],
 };
 export function connectionFields(type: string, mode: YouTubeAuthMode) {
   return type === 'youtube' && mode === 'oauth'

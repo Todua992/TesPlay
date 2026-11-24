@@ -1,5 +1,6 @@
 import { plainText, mediaDate } from "./text.js";
 import { registerStremioRoutes } from './stremio.js';
+import { registerMovieBoxRoutes } from './moviebox.js';
 import { createYouTubeResolver } from "./youtube.js";
 import { registerYouTubeBrowser } from "./youtube-browser.js";
 import { registerPlexLibrary } from "./plex-library.js";
@@ -534,6 +535,7 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
     library: (req) => ctx.libraryState ? ctx.libraryState(req) : { progress: [] },
     stars: (req) => ctx.stars ? ctx.stars(req) : [],
   });
+  const moviebox = registerMovieBoxRoutes(app, { ctx, connection, route, art, media, cached, cacheKey, dependencies });
   if (!ctx.media) {
     app.get(["/api/media/:token", "/api/v1/media/:token"], media.handler);
     app.post('/api/media/:token/heartbeat', media.heartbeatHandler);
@@ -593,6 +595,8 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
           chart: "mostPopular",
           maxResults: "1",
         });
+      } else if (c.type === "moviebox") {
+        await moviebox.browseCatalog(req, c, { tab: "trending", page: 1 });
       } else throw providerError("Unsupported connection type.");
       res.json({ ok: true, message: `${c.name} is connected.` });
     }),
@@ -958,6 +962,24 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
           nextPageToken: data.nextPageToken,
         });
       }
+      if (c.type === "moviebox") {
+        const result = await moviebox.browseCatalog(req, c, {
+          tab: String(req.query.category || (p.kind === "movie" ? "movies" : p.kind === "series" ? "series" : "trending")),
+          page: p.page,
+          q: p.q,
+          kind: p.kind,
+        });
+        return res.json({
+          ...result,
+          categories: [
+            { id: "trending", name: "Trending" },
+            { id: "movies", name: "Movies" },
+            { id: "series", name: "TV Series" },
+            { id: "anime", name: "Anime" },
+            { id: "rankings", name: "Rankings" },
+          ],
+        });
+      }
       throw providerError("Unsupported library.");
     }),
   );
@@ -967,6 +989,9 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
       const seriesId = kind === 'series' ? numeric(id) : /^(\d+):\d+:[a-zA-Z0-9]{1,8}$/.exec(id)?.[1];
       if (!seriesId) throw providerError("Invalid series or episode.");
       return xtreamEpisodes(req, c, seriesId);
+    }
+    if (c.type === "moviebox") {
+      return moviebox.resolveEpisodes(req, c, id);
     }
     if (c.type !== "plex") return [];
     const token = plexToken(req, c);
@@ -1006,6 +1031,9 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
   const plexQualities = [{id:'auto',label:'Auto / original'}, {id:'1080p',label:'1080p · 8 Mbps'}, {id:'720p',label:'720p · 4 Mbps'}, {id:'480p',label:'480p · 2 Mbps'}];
   app.get('/api/playback/options', route(async (req,res) => {
     const c = connection(req, req.query.connectionId), id = String(req.query.itemId || '');
+    if (c.type === 'moviebox') {
+      return res.json(await moviebox.resolvePlaybackOptions(req, c, id, String(req.query.kind || 'movie')));
+    }
     if (c.type !== 'plex') {
       if (c.type === 'xtream') await ensureXtream(req,c,req.query.kind === 'episode' ? 'series' : String(req.query.kind), req.query.kind === 'episode' ? id.split(':')[0] : id);
       return res.json({audio:[],subtitles:[],qualities:[]});
@@ -1162,6 +1190,10 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
           throw providerError("Invalid YouTube video.");
         ensure(req,c,{type:"video"});
         return res.json(await youtubePlayback(req, id, c));
+      }
+      if (c.type === "moviebox") {
+        ensure(req, c, { type: kind === "episode" || kind === "series" ? "series" : "movie" });
+        return res.json(await moviebox.resolvePlayback(req, c, id, kind, req.query));
       }
       if (c.type === "plex") {
         numeric(id);

@@ -1,0 +1,132 @@
+.mb-hub { padding-top: 22px; }
+
+.mb-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 24px;
+  border-radius: 7px;
+  background: #10b981;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.mb-search-go {
+  background: #10b981 !important;
+  color: #fff !important;
+}
+
+.mb-suggestions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: -4px 0 18px;
+}
+
+.mb-suggestions-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.mb-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.mb-chip:hover {
+  border-color: #10b981;
+  color: var(--text);
+  background: color-mix(in srgb, #10b981 10%, var(--surface));
+}
+
+.mb-account-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mb-account-pill:hover {
+  border-color: #10b981;
+  color: var(--text);
+}
+
+.mb-account-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.mb-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.mb-tabs-row .yt-tabs {
+  margin-bottom: 0;
+}
+
+.mb-load-more {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0 8px;
+}
+
+.mb-setup-card {
+  max-width: 560px;
+  margin: 36px auto;
+  padding: 28px;
+  border-radius: 18px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  text-align: center;
+}
+
+.mb-setup-card h2 {
+  margin: 14px 0 8px;
+  font-size: 22px;
+}
+
+.mb-setup-card p {
+  margin: 0 0 20px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.mb-setup-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .mb-hub { padding-top: 14px; }
+  .mb-brand span:last-child { display: none; }
+  .mb-account-pill span:last-child { display: none; }
+}

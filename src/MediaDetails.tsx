@@ -33,6 +33,7 @@ function LibraryDetails({ item, onClose, onPlay, onFavorite, saved, isPlex }: {
   isPlex: boolean;
 }) {
   const isStremio = item.providerType === 'stremio';
+  const isMovieBox = item.providerType === 'moviebox';
   const series = item.type === 'series' || item.type === 'episode' || item.type === 'folder' && !!item.seriesId;
   const [episodes, setEpisodes] = useState<MediaItem[]>([]);
   const [episodeLoading, setEpisodeLoading] = useState(series);
@@ -70,7 +71,7 @@ function LibraryDetails({ item, onClose, onPlay, onFavorite, saved, isPlex }: {
     return startDetailsDiscovery(async signal => {
       const preferences = api<PlayerPreferences>('/player/preferences',undefined,undefined,signal).catch(() => { signal.throwIfAborted(); return defaultPlayerPreferences; });
       const available = async (): Promise<PlaybackOptions> => {
-        if (isPlex || isStremio) return api<PlaybackOptions>(`/playback/options?${new URLSearchParams({ connectionId: selected.connectionId || '', itemId: selected.id, kind: selected.type })}`, undefined, undefined, signal);
+        if (isPlex || isStremio || isMovieBox) return api<PlaybackOptions>(`/playback/options?${new URLSearchParams({ connectionId: selected.connectionId || '', itemId: selected.id, kind: selected.type })}`, undefined, undefined, signal);
         const [{ resolvePlayback }, { createTesPlayAdapter }] = await Promise.all([import('./playback-selection'), import('./tesplayer-adapter')]);
         signal.throwIfAborted();
         const playback = await resolvePlayback(selected, {}, signal, defaultPlayerPreferences);
@@ -87,7 +88,7 @@ function LibraryDetails({ item, onClose, onPlay, onFavorite, saved, isPlex }: {
       onResult: ({ result, defaults }) => dispatchDiscovery({ type: 'resolved', identity, options: result, preferences: defaults }),
       onError: reason => dispatchDiscovery({ type: 'failed', identity, error: errorMessage(reason) }),
     });
-  }, [selected, discovery.selectionId, isPlex, isStremio, item.unavailable]);
+  }, [selected, discovery.selectionId, isPlex, isStremio, isMovieBox, item.unavailable]);
 
   function chooseEpisode(episode: MediaItem) {
     if (selected && itemKey(selected) === itemKey(episode)) return;
