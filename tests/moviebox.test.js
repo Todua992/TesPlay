@@ -185,3 +185,43 @@ test("MovieBox client bootstraps guest token and service resolves search, episod
   assert.equal(registered[0].headers["User-Agent"], "ExoPlayerLib/2.18.7");
   assert.ok(requests.some((r) => r.headers.Authorization === "Bearer guest-jwt-1"));
 });
+
+test("MovieBox search flattens grouped results and unwraps info-wrapped subjects", async () => {
+  const jsonRes = (body) => ({ status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body) });
+  const fakeFetch = async (url) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/user-api/visitor-login")) return jsonRes({ code: 0, data: { token: "guest" } });
+    if (path.endsWith("/subject-api/search/v2")) {
+      return jsonRes({
+        code: 0,
+        data: {
+          pager: { hasMore: false },
+          items: [
+            { title: "Related Sports", subjects: [{ subjectId: "900", subjectType: 1, title: "Sport Clip" }] },
+            { title: "", subjects: [{ subjectId: "101", subjectType: 1, title: "The Batman", releaseDate: "2022-03-04" }] },
+            { info: { subjectId: "102", subjectType: 2, title: "Batman: The Animated Series" } },
+            { title: "Related Music", items: [] },
+          ],
+        },
+      });
+    }
+    if (path.endsWith("/subject-api/genre-top")) {
+      return jsonRes({ code: 0, data: { list: [{ info: { subjectId: "201", subjectType: 2, title: "SEAL Team" }, number: 1 }] } });
+    }
+    return jsonRes({ code: 0, data: {} });
+  };
+  const service = createMovieBoxService({
+    client: createMovieBoxClient({ fetchImpl: fakeFetch }),
+    art: (_req, _c, u) => `art:${u}`,
+    media: { register: () => "/api/media/x" },
+    cached: async (_k, fn) => fn(),
+    cacheKey: (c) => c.id,
+  });
+  const conn = { id: "mb-2", type: "moviebox", name: "MovieBox Pro", config: {} };
+
+  const search = await service.browseCatalog({}, conn, { q: "batman", page: 1 });
+  assert.deepEqual(search.items.map((i) => i.title), ["The Batman", "Batman: The Animated Series", "Sport Clip"]);
+
+  const trending = await service.browseCatalog({}, conn, { tab: "trending", page: 1 });
+  assert.deepEqual(trending.items.map((i) => i.title), ["SEAL Team"]);
+});

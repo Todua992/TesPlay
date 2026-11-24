@@ -150,7 +150,7 @@ function normalizeImageUrl(raw) {
 }
 
 export function mapMovieBoxSubject(req, c, raw, art) {
-  const item = raw?.subject && typeof raw.subject === "object" ? raw.subject : raw;
+  const item = subjectOf(raw);
   const sid = String(item?.subjectId || item?.id || "").trim();
   if (!sid || sid === "0") return null;
 
@@ -414,7 +414,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       },
     });
     if (![0, 200].includes(reset?.code)) {
-      throw providerError(reset?.msg || reset?.message || "MovieBox rejected this verification code.", 401);
+      throw providerError(`${reset?.msg || reset?.message || "MovieBox rejected this verification code."} (code type ${type})`, 401);
     }
     return loginAccount(c, trimmed, password);
   }
@@ -422,21 +422,36 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
   return { request, loginAccount, requestLoginCode, verifyLoginCode };
 }
 
+// Unwrap a catalogue entry: MovieBox nests the subject under .subject or .info.
+function subjectOf(raw) {
+  if (raw?.subject && typeof raw.subject === "object") return raw.subject;
+  if (raw?.info && typeof raw.info === "object" && (raw.info.subjectId || raw.info.id)) return raw.info;
+  return raw;
+}
+const hasSubjectId = (raw) => {
+  const s = subjectOf(raw);
+  return Boolean(s && (s.subjectId || s.id));
+};
+
+// Flatten MovieBox list payloads. Search returns groups ("Related Collection",
+// "Related Sports", ...) whose results sit in a nested array; expand those, and
+// put the main (non-"Related") groups first.
 function extractSubjects(data) {
   if (!data || typeof data !== "object") return [];
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.list)) return data.list;
-  if (Array.isArray(data.subjects)) return data.subjects;
-  if (Array.isArray(data.results)) {
-    const out = [];
-    for (const group of data.results) {
-      if (Array.isArray(group?.subjects)) out.push(...group.subjects);
-      else if (Array.isArray(group?.items)) out.push(...group.items);
-      else if (group?.subjectId || group?.id) out.push(group);
-    }
-    return out;
+  const top = ["items", "list", "subjects", "results"].map((k) => data[k]).find(Array.isArray);
+  if (!top) return [];
+  const main = [];
+  const related = [];
+  for (const entry of top) {
+    if (hasSubjectId(entry)) { main.push(entry); continue; }
+    const nested = entry && typeof entry === "object"
+      ? Object.values(entry).find((v) => Array.isArray(v) && v.some(hasSubjectId))
+      : null;
+    if (!nested) continue;
+    const label = String(entry.title || entry.name || "");
+    (/^related\b/i.test(label) ? related : main).push(...nested.filter(hasSubjectId));
   }
-  return [];
+  return [...main, ...related];
 }
 
 function dedupeItems(items) {
