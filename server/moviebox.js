@@ -5,6 +5,18 @@ import { providerError, validateRemoteUrl } from "./media.js";
 const GATEWAY_SECRET_ONLINE = "76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O";
 const DEFAULT_BASE_URL = "https://apig.inmoviebox.com";
 const FALLBACK_BASE_URLS = ["https://apig.inmoviebox.com", "https://api6.aoneroom.com"];
+
+// MovieBox geo-routes its catalog (trending, genre-top, search ranking) off the
+// `region` header and client-info. Default to US ("global English") instead of
+// India; each connection may override via config.region.
+const DEFAULT_REGION = "US";
+const REGION_PROFILES = {
+  US: { timezone: "America/New_York", sp_code: "310260" },
+  GB: { timezone: "Europe/London", sp_code: "23430" },
+  DE: { timezone: "Europe/Berlin", sp_code: "26201" },
+  FR: { timezone: "Europe/Paris", sp_code: "20801" },
+  IN: { timezone: "Asia/Kolkata", sp_code: "404" },
+};
 const TRAP_MARKERS = [
   "notice.mp4",
   "1c7de0bd3393702d9191801f15f88f8d",
@@ -54,8 +66,9 @@ export function generateTrSignature(method, url, bodyData = "", timestamp = Date
   return `${timestamp}|2|${digest}`;
 }
 
-export function defaultClientInfo(deviceId) {
+export function defaultClientInfo(deviceId, region = DEFAULT_REGION) {
   const id = deviceId || `86820305${String(randomInt(1000000, 9999999))}`;
+  const profile = REGION_PROFILES[region] || REGION_PROFILES[DEFAULT_REGION];
   return {
     package_name: "com.community.oneroom",
     version_name: "4.0.02",
@@ -70,9 +83,9 @@ export function defaultClientInfo(deviceId) {
     model: "Pixel 6",
     system_language: "en",
     net: "wifi",
-    region: "IN",
-    timezone: "Asia/Kolkata",
-    sp_code: "404",
+    region,
+    timezone: profile.timezone,
+    sp_code: profile.sp_code,
   };
 }
 
@@ -203,11 +216,11 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
         Referer: `${base}/`,
         "X-Sign-Version": "2.0",
         "X-Client-Token": generateClientToken(ts),
-        "X-Client-Info": JSON.stringify(defaultClientInfo(state.deviceId)),
+        "X-Client-Info": JSON.stringify(defaultClientInfo(state.deviceId, c.config?.region || DEFAULT_REGION)),
         "X-Client-Status": state.token ? "0" : "1",
         "X-Play-Mode": "2",
         appid: "4U01pxRu278GqCZKY9",
-        region: c.config?.region || "IN",
+        region: c.config?.region || DEFAULT_REGION,
         lang: "en",
         os: "android",
         "X-Timestamp": String(ts),
@@ -325,7 +338,60 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     };
   }
 
-  return { request, loginAccount };
+  // MovieBox dropped password login in favour of an emailed/SMS verification
+  // code. Step 1: ask MovieBox to send the code to the account.
+  async function requestLoginCode(c, account) {
+    const trimmed = String(account || "").trim();
+    if (!trimmed) throw providerError("Enter your MovieBox email or phone.");
+    const isEmail = trimmed.includes("@");
+    const payload = {
+      package_name: "com.community.oneroom",
+      authType: isEmail ? 1 : 0,
+      type: 2, // 1 = Register, 2 = Login, 3 = Reset
+      ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
+    };
+    const res = await rawRequest(c, "POST", "/wefeed-mobile-bff/user-api/get-sms-code", { data: payload });
+    if (![0, 200].includes(res?.code)) {
+      throw providerError(res?.msg || res?.message || "MovieBox could not send a verification code. Check the email or phone and try again.", 400);
+    }
+    return { sent: true, channel: isEmail ? "email" : "phone" };
+  }
+
+  // Step 2: exchange the code for a session token. The passwordless-login
+  // endpoint/field is not officially documented, so try the known shapes in
+  // order and accept the first that returns a token.
+  async function verifyLoginCode(c, account, code) {
+    const trimmed = String(account || "").trim();
+    const otp = String(code || "").trim();
+    if (!trimmed || !otp) throw providerError("Enter your MovieBox email/phone and the verification code.");
+    const isEmail = trimmed.includes("@");
+    const identity = isEmail ? { mail: trimmed } : { phone: trimmed };
+    const base = { package_name: "com.community.oneroom", authType: isEmail ? 1 : 0, ...identity };
+    const attempts = [
+      ["/wefeed-mobile-bff/user-api/login", { ...base, type: 0, verificationCode: otp }],
+      ["/wefeed-mobile-bff/user-api/check-sms-code", { ...base, type: 2, verificationCode: otp }],
+      ["/wefeed-mobile-bff/user-api/login", { ...base, type: 0, smsCode: otp }],
+    ];
+    let last = null;
+    for (const [endpoint, payload] of attempts) {
+      const res = await rawRequest(c, "POST", endpoint, { data: payload }).catch((err) => ({ _err: err }));
+      if (res && !res._err && [0, 200].includes(res.code) && res.data?.token) {
+        return {
+          token: res.data.token,
+          userId: String(res.data.userId || res.data.uid || ""),
+          userInfo: {
+            nickname: res.data.nickname || trimmed,
+            avatar: res.data.avatar || "",
+            email: res.data.mail || (isEmail ? trimmed : ""),
+          },
+        };
+      }
+      if (res && !res._err) last = res;
+    }
+    throw providerError(last?.msg || last?.message || "MovieBox rejected this verification code.", 401);
+  }
+
+  return { request, loginAccount, requestLoginCode, verifyLoginCode };
 }
 
 function extractSubjects(data) {
@@ -781,10 +847,18 @@ export function registerMovieBoxRoutes(app, { ctx, connection, route, art, media
   const client = dependencies.movieboxClient || createMovieBoxClient();
   const service = createMovieBoxService({ client, art, media, cached, cacheKey });
 
+  app.post("/api/moviebox/:connectionId/request-code", ctx.requireConnectionManager || ((_r, _s, n) => n()), route(async (req, res) => {
+    const c = connection(req, req.params.connectionId, "moviebox");
+    const { account } = req.body || {};
+    res.json(await client.requestLoginCode(c, account));
+  }));
+
   app.post("/api/moviebox/:connectionId/login", ctx.requireConnectionManager || ((_r, _s, n) => n()), route(async (req, res) => {
     const c = connection(req, req.params.connectionId, "moviebox");
-    const { account, password } = req.body || {};
-    const auth = await client.loginAccount(c, account, password);
+    const { account, code, password } = req.body || {};
+    const auth = code
+      ? await client.verifyLoginCode(c, account, code)
+      : await client.loginAccount(c, account, password);
     const updated = ctx.saveConnection(req, {
       id: c.id,
       type: c.type,

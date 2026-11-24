@@ -57,7 +57,8 @@ export default function MovieBoxHub({
 
   const [accountModal, setAccountModal] = useState(false);
   const [loginAccount, setLoginAccount] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [loginCode, setLoginCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
 
@@ -162,14 +163,30 @@ export default function MovieBoxHub({
     }
   }
 
+  async function sendLoginCode(e: FormEvent) {
+    e.preventDefault();
+    if (!c || !loginAccount.trim()) return;
+    setLoginBusy(true);
+    setLoginError('');
+    try {
+      await api(`/moviebox/${c.id}/request-code`, { account: loginAccount.trim() });
+      setCodeSent(true);
+    } catch (err) {
+      setLoginError(errorMessage(err));
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
   async function submitAccountLogin(e: FormEvent) {
     e.preventDefault();
     if (!c) return;
     setLoginBusy(true);
     setLoginError('');
     try {
-      await api(`/moviebox/${c.id}/login`, { account: loginAccount, password: loginPassword });
-      setLoginPassword('');
+      await api(`/moviebox/${c.id}/login`, { account: loginAccount.trim(), code: loginCode.trim() });
+      setLoginCode('');
+      setCodeSent(false);
       await onReloadConnections();
       setAccountModal(false);
     } catch (err) {
@@ -271,6 +288,8 @@ export default function MovieBoxHub({
             className="mb-account-pill"
             onClick={() => {
               setLoginError('');
+              setLoginCode('');
+              setCodeSent(false);
               setAccountModal(true);
             }}
             title="MovieBox account"
@@ -387,34 +406,51 @@ export default function MovieBoxHub({
       {accountModal && (
         <Modal title="MovieBox Pro Account" onClose={() => setAccountModal(false)}>
           <p className="form-help">
-            {c.summary || 'Using instant Guest access.'} Sign in with your MovieBox account to sync your VIP tier, or continue in Guest mode.
+            {c.summary || 'Using instant Guest access.'} MovieBox signs you in with a verification code sent to your email or phone. Or continue in Guest mode.
           </p>
           {canManage ? (
-            <form onSubmit={(e) => void submitAccountLogin(e)}>
+            <form onSubmit={(e) => void (codeSent ? submitAccountLogin(e) : sendLoginCode(e))}>
               <label>
                 Email or phone
                 <input
                   value={loginAccount}
-                  onChange={(e) => setLoginAccount(e.target.value)}
+                  onChange={(e) => { setLoginAccount(e.target.value); if (codeSent) { setCodeSent(false); setLoginCode(''); } }}
                   placeholder="you@example.com"
+                  autoComplete="username"
                   required
                 />
               </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Your MovieBox password"
-                  required
-                />
-              </label>
+              {codeSent && (
+                <label>
+                  Verification code
+                  <input
+                    value={loginCode}
+                    onChange={(e) => setLoginCode(e.target.value)}
+                    placeholder="6-digit code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    required
+                  />
+                </label>
+              )}
+              {codeSent && <p className="form-help" role="status">Code sent. Check your {loginAccount.includes('@') ? 'email' : 'phone'} and enter it above.</p>}
               {loginError && <p className="form-error" role="alert">{loginError}</p>}
               <div className="form-actions">
-                <button type="submit" className="button primary" disabled={loginBusy}>
-                  {loginBusy ? 'Signing in…' : 'Sign in'}
-                </button>
+                {!codeSent ? (
+                  <button type="submit" className="button primary" disabled={loginBusy || !loginAccount.trim()}>
+                    {loginBusy ? 'Sending…' : 'Send code'}
+                  </button>
+                ) : (
+                  <>
+                    <button type="submit" className="button primary" disabled={loginBusy || !loginCode.trim()}>
+                      {loginBusy ? 'Signing in…' : 'Sign in'}
+                    </button>
+                    <button type="button" className="button ghost" disabled={loginBusy} onClick={(e) => void sendLoginCode(e as unknown as FormEvent)}>
+                      Resend code
+                    </button>
+                  </>
+                )}
                 {c.authMode === 'account' && (
                   <button type="button" className="button ghost" disabled={loginBusy} onClick={() => void switchToGuest()}>
                     Use Guest mode
