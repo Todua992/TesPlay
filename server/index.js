@@ -308,8 +308,12 @@ export async function createApp(options = {}) {
             ? "This request is too large."
             : error.message;
     // Provider errors can contain credentials in request URLs. Never echo stack traces or URLs.
-    if (status === 500 && !options.quiet)
-      console.error("TesPlay request failed:", error.name ?? "Error", "-", error.message || "");
+    if (status >= 500 && !options.quiet) {
+      // Messages are curated provider text or runtime errors; the first stack
+      // frame (file:line only) locates unexpected errors without leaking URLs.
+      const frame = status === 500 ? /\((?:file:\/\/)?([^()]+:\d+):\d+\)/.exec(String(error.stack || "").split("\n")[1] || "")?.[1] : "";
+      console.error("TesPlay request failed:", status, req.method, req.path.replace(/\/[^/]{20,}/g, "/…"), error.name ?? "Error", "-", error.message || "", frame ? `@ ${frame}` : "");
+    }
     res.status(status).json({ error: message, ...(error.code?{code:error.code}:{}) });
   });
   return {
