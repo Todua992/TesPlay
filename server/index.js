@@ -309,7 +309,7 @@ export async function createApp(options = {}) {
             : error.message;
     // Provider errors can contain credentials in request URLs. Never echo stack traces or URLs.
     if (status === 500 && !options.quiet)
-      console.error("TesPlay request failed:", error.name ?? "Error", "-", error.message || "", "\n", (error.stack || "").split("\n").slice(0, 5).join("\n"));
+      console.error("TesPlay request failed:", error.name ?? "Error", "-", error.message || "");
     res.status(status).json({ error: message, ...(error.code?{code:error.code}:{}) });
   });
   return {

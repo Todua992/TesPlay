@@ -11,10 +11,12 @@ const GLOBAL_BASE_URLS = ["https://i-api.aoneroom.com", "https://api.aoneroom.co
 const INDIA_BASE_URLS = ["https://apig.inmoviebox.com", "https://api6.aoneroom.com"];
 const DEFAULT_BASE_URL = GLOBAL_BASE_URLS[0];
 
-// MovieBox geo-routes its catalog (trending, genre-top, search ranking) off the
-// `region` header, client-info and the base host. Default to US ("global
-// English") instead of India; each connection may override via config.region.
-const DEFAULT_REGION = "US";
+// MovieBox geo-routes its catalog off the `region` header, client-info and the
+// base host. The global ("aoneroom") endpoint rejects our India app credentials
+// with 403 "Service not available in current region", so IN is the only region
+// that actually serves this deployment. A connection may still override via
+// config.region (e.g. US) once matching global gateway credentials exist.
+const DEFAULT_REGION = "IN";
 const REGION_PROFILES = {
   US: { timezone: "America/New_York", sp_code: "310260", hosts: GLOBAL_BASE_URLS },
   GB: { timezone: "Europe/London", sp_code: "23430", hosts: GLOBAL_BASE_URLS },
@@ -362,7 +364,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
       type: 2, // 1 = Register, 2 = Login, 3 = Reset
       ...(isEmail ? { mail: trimmed } : { phone: trimmed }),
     };
-    const res = await rawRequest(c, "POST", "/wefeed-mobile-bff/user-api/get-sms-code", { data: payload });
+    const res = await request(c, "POST", "/wefeed-mobile-bff/user-api/get-sms-code", { data: payload });
     if (![0, 200].includes(res?.code)) {
       throw providerError(res?.msg || res?.message || "MovieBox could not send a verification code. Check the email or phone and try again.", 400);
     }
@@ -387,7 +389,7 @@ export function createMovieBoxClient({ fetchImpl } = {}) {
     const diag = [];
     for (const [endpoint, payload] of attempts) {
       const field = payload.verificationCode !== undefined ? "verificationCode" : "smsCode";
-      const res = await rawRequest(c, "POST", endpoint, { data: payload }).catch((err) => ({ _err: err }));
+      const res = await request(c, "POST", endpoint, { data: payload }).catch((err) => ({ _err: err }));
       if (res && !res._err && [0, 200].includes(res.code) && res.data?.token) {
         return {
           token: res.data.token,

@@ -296,9 +296,10 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
     return c.config.token;
   }
   async function plexRequest(c, pathname, token, options = {}) {
-    const url = pathname.startsWith("https://plex.tv/")
-      ? new URL(pathname)
-      : new URL(pathname, c.config.url);
+    const absolute = /^https?:\/\//i.test(pathname);
+    if (!absolute && !c.config?.url)
+      throw providerError("This Plex connection has no server address saved. Reconnect it from Connections.", 400);
+    const url = absolute ? new URL(pathname) : new URL(pathname, c.config.url);
     const body = await fetchData(url, {
       text: true,
       headers: plexHeaders(c, token),
