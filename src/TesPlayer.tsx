@@ -92,11 +92,16 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
   const options = useRef({ resume, item, plexCompatibility });
   options.current = { resume, item, plexCompatibility };
   const error = (reason: unknown) => {
-    const typed = reason as { code?: string };
+    const typed = reason as { code?: string; message?: string; cause?: unknown; safeCause?: string | null };
     const unavailable = reason instanceof Error && reason.message === 'Canvas playback is unavailable.';
     if (typed?.code === 'STALE_OPERATION' || (reason instanceof DOMException && reason.name === 'AbortError')) return;
     // Engine errors are already sanitized. Avoid showing raw fetch URLs or credentials.
-    const text = reason instanceof TesPlaySourceError ? reason.message : unavailable ? 'This browser does not support TesPlayer canvas playback. Use an updated browser with WebCodecs enabled.' : typed?.code ? `Playback could not continue (${typed.code}). ${playback.provider === 'plex' ? 'Try again or choose Plex compatibility for this title.' : 'Reopen this title or try another stream.'}` : 'This source could not play. Check its connection and browser codec support, then try again.';
+    // Their message, cause and the stream's codecs tell a codec problem from a network one.
+    const stats = engine.current?.getSnapshot().diagnostics;
+    // Emitted PlayerErrors carry the safe cause as `cause`; a thrown EngineFault as `safeCause`.
+    const cause = typeof typed?.cause === 'string' ? typed.cause : typed?.safeCause;
+    const details = typed?.code ? [typed.message, cause, stats?.videoCodec, stats?.audioCodec, stats?.codedWidth && stats.codedHeight ? `${stats.codedWidth}×${stats.codedHeight}` : ''].filter(Boolean).join(' · ') : '';
+    const text = reason instanceof TesPlaySourceError ? reason.message : unavailable ? 'This browser does not support TesPlayer canvas playback. Use an updated browser with WebCodecs enabled.' : typed?.code ? `Playback could not continue (${typed.code}${details ? `: ${details}` : ''}). ${playback.provider === 'plex' ? 'Try again or choose Plex compatibility for this title.' : 'Reopen this title or try another stream.'}` : 'This source could not play. Check its connection and browser codec support, then try again.';
     if(['DEMUX_FAILED','NETWORK_TIMEOUT','RECOVERY_EXHAUSTED','DECODE_FAILED'].includes(typed?.code||'') && retries.current<2){
       if(retryPending.current)return;retryPending.current=true;
       progress.current(lastPosition.current,lastDuration.current);setBusy(true);setMessage('Reconnecting to your stream');
