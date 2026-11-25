@@ -3,7 +3,7 @@
 // Browsers decode AAC, MP3 and Opus, but not the AC-3/E-AC-3 (Dolby) or DTS
 // audio that many new releases carry. For such a file the player keeps reading
 // video from the original and reads audio from a virtual WAV file served here:
-// 16-bit stereo PCM at 48 kHz has a fixed byte rate, so every byte range maps to
+// stereo 48 kHz PCM has a fixed byte rate, so every byte range maps to
 // an exact time and FFmpeg decodes just that part of the source on demand.
 // Seeking stays cheap and no converted copy is stored. FFmpeg reaches the source
 // only through a loopback proxy that applies TesPlay's remote-address checks.
@@ -15,28 +15,34 @@ import { pipeline } from "node:stream/promises";
 
 export const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
-const FRAME_BYTES = CHANNELS * 2;
 export const HEADER_BYTES = 44;
+// Both formats have a fixed byte rate. 16-bit PCM is the default; 8-bit μ-law
+// is for browsers whose WebCodecs lacks PCM (μ-law has been there since
+// Chrome 93, below TesPlayer's WebCodecs baseline). μ-law silence is 0xFF.
+const FORMATS = {
+  pcm: { tag: 1, bytes: 2, codec: "pcm_s16le", muxer: "s16le", silence: Buffer.alloc(64 * 1024) },
+  ulaw: { tag: 7, bytes: 1, codec: "pcm_mulaw", muxer: "mulaw", silence: Buffer.alloc(64 * 1024, 0xff) },
+};
+export const formatName = (name) => (Object.hasOwn(FORMATS, name) ? name : "pcm");
+const frameBytes = (format) => CHANNELS * FORMATS[format].bytes;
 // The RIFF size fields are 32-bit; six hours of 48 kHz stereo PCM fit.
 const MAX_SECONDS = 6 * 3600;
 // Real media containers only: an HLS playlist would make FFmpeg fetch other
 // addresses itself instead of going through the loopback proxy.
 const DEMUXERS = "mov,matroska,mpegts,avi";
-const ZEROS = Buffer.alloc(64 * 1024);
-
-/** Canonical 44-byte header of a 16-bit stereo 48 kHz PCM WAV file. */
-export function wavHeader(dataBytes) {
+/** Canonical 44-byte header of a stereo 48 kHz WAV file. */
+export function wavHeader(dataBytes, format = "pcm") {
   const header = Buffer.alloc(HEADER_BYTES);
   header.write("RIFF", 0, "ascii");
   header.writeUInt32LE(36 + dataBytes, 4);
   header.write("WAVEfmt ", 8, "ascii");
   header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20); // integer PCM
+  header.writeUInt16LE(FORMATS[format].tag, 20);
   header.writeUInt16LE(CHANNELS, 22);
   header.writeUInt32LE(SAMPLE_RATE, 24);
-  header.writeUInt32LE(SAMPLE_RATE * FRAME_BYTES, 28);
-  header.writeUInt16LE(FRAME_BYTES, 32);
-  header.writeUInt16LE(16, 34);
+  header.writeUInt32LE(SAMPLE_RATE * frameBytes(format), 28);
+  header.writeUInt16LE(frameBytes(format), 32);
+  header.writeUInt16LE(FORMATS[format].bytes * 8, 34);
   header.write("data", 36, "ascii");
   header.writeUInt32LE(dataBytes, 40);
   return header;
@@ -50,8 +56,8 @@ export function probeArgs(input) {
   ];
 }
 
-/** Decode one audio stream from `seconds` (relative to the source's start) to raw PCM. */
-export function decodeArgs(input, seconds, stream) {
+/** Decode one audio stream from `seconds` (relative to the source's start) to raw samples. */
+export function decodeArgs(input, seconds, stream, format = "pcm") {
   return [
     "-nostdin", "-hide_banner", "-loglevel", "error",
     "-protocol_whitelist", "http,tcp", "-format_whitelist", DEMUXERS,
@@ -61,7 +67,7 @@ export function decodeArgs(input, seconds, stream) {
     "-map", `0:a:${stream}`, "-vn", "-sn", "-dn",
     // Pad gaps and late starts with silence so byte offsets keep matching time.
     "-af", "aresample=async=1:first_pts=0",
-    "-ac", String(CHANNELS), "-ar", String(SAMPLE_RATE), "-c:a", "pcm_s16le", "-f", "s16le", "pipe:1",
+    "-ac", String(CHANNELS), "-ar", String(SAMPLE_RATE), "-c:a", FORMATS[format].codec, "-f", FORMATS[format].muxer, "pipe:1",
   ];
 }
 
@@ -72,8 +78,9 @@ export function chooseStream(streams, trackNumber) {
   return Math.max(0, streams.findIndex((s) => Number(s?.disposition?.default) === 1));
 }
 
-function* zeros(count) {
-  for (let left = count; left > 0; left -= ZEROS.length) yield ZEROS.subarray(0, Math.min(left, ZEROS.length));
+function* silence(count, format) {
+  const block = FORMATS[format].silence;
+  for (let left = count; left > 0; left -= block.length) yield block.subarray(0, Math.min(left, block.length));
 }
 
 // Serves registered sources on 127.0.0.1 under unguessable paths, so FFmpeg can
@@ -162,7 +169,8 @@ export function createAudioCompat({
   }
 
   /** Read the source's audio layout: which stream to convert and how long the WAV is. */
-  async function probe(source, trackNumber) {
+  async function probe(source, trackNumber, requestedFormat) {
+    const format = formatName(requestedFormat);
     const input = await loopback.open(source);
     let info;
     try {
@@ -181,9 +189,10 @@ export function createAudioCompat({
       throw providerError("The audio of this title cannot be converted because its length is unknown.", 422);
     const stream = chooseStream(streams, trackNumber);
     return {
+      format,
       stream,
       startTime,
-      dataBytes: Math.ceil(end * SAMPLE_RATE) * FRAME_BYTES,
+      dataBytes: Math.ceil(end * SAMPLE_RATE) * frameBytes(format),
       codec: String(streams[stream]?.codec_name || "unknown").slice(0, 32),
     };
   }
@@ -191,26 +200,27 @@ export function createAudioCompat({
   // WAV time 0 is the source timeline's 0. Bytes before the source's first
   // sample are silence; bytes after its audio ends are silence too.
   async function* body(item, start, end, stop) {
+    const bytes = frameBytes(item.format);
     let left = end - start + 1;
     if (start < HEADER_BYTES) {
-      const part = wavHeader(item.dataBytes).subarray(start, Math.min(HEADER_BYTES, end + 1));
+      const part = wavHeader(item.dataBytes, item.format).subarray(start, Math.min(HEADER_BYTES, end + 1));
       left -= part.length;
       yield part;
     }
     const offset = Math.max(0, start - HEADER_BYTES);
-    const frame = Math.floor(offset / FRAME_BYTES);
-    let skip = offset - frame * FRAME_BYTES;
+    const frame = Math.floor(offset / bytes);
+    let skip = offset - frame * bytes;
     const seconds = frame / SAMPLE_RATE - item.startTime;
-    const lead = Math.min(left, seconds < 0 ? Math.round(-seconds * SAMPLE_RATE) * FRAME_BYTES - skip : 0);
+    const lead = Math.min(left, seconds < 0 ? Math.round(-seconds * SAMPLE_RATE) * bytes - skip : 0);
     if (lead > 0) {
-      yield* zeros(lead);
+      yield* silence(lead, item.format);
       left -= lead;
       skip = 0;
     }
     if (left <= 0 || stop.aborted) return;
     const input = await loopback.open(item.source);
     running++;
-    const child = spawnProcess(ffmpeg, decodeArgs(input.url, Math.max(0, seconds), item.stream), { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawnProcess(ffmpeg, decodeArgs(input.url, Math.max(0, seconds), item.stream, item.format), { stdio: ["ignore", "pipe", "pipe"] });
     // Stop at once when the player drops this read, even while FFmpeg waits on the source.
     const kill = () => child.kill("SIGKILL");
     stop.addEventListener("abort", kill, { once: true });
@@ -241,7 +251,7 @@ export function createAudioCompat({
         console.warn("TesPlay audio conversion failed:", failure.split("\n")[0].replace(/https?:\/\/\S+/g, "<source>").slice(0, 200));
         throw providerError("Audio conversion stopped.", 502);
       }
-      yield* zeros(left);
+      yield* silence(left, item.format);
     } finally {
       stop.removeEventListener("abort", kill);
       kill();
@@ -256,7 +266,7 @@ export function createAudioCompat({
     const range = parseRange(req.headers.range, size);
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Content-Type", "audio/wav");
-    res.setHeader("X-Csp-Representation-Id", "mr1_" + createHash("sha256").update(`tesplay-audio-compat-v1\0${token}\0${size}`).digest("base64url"));
+    res.setHeader("X-Csp-Representation-Id", "mr1_" + createHash("sha256").update(`tesplay-audio-compat-v1\0${token}\0${item.format}\0${size}`).digest("base64url"));
     if (range === false) return res.status(416).set("Content-Range", `bytes */${size}`).end();
     const start = range ? range.start : 0;
     const end = range ? range.end : size - 1;

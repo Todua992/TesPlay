@@ -70,6 +70,8 @@ test('the WAV header describes 16-bit stereo 48 kHz PCM of the given length', ()
   assert.deepEqual([header.readUInt16LE(20), header.readUInt16LE(22), header.readUInt32LE(24), header.readUInt32LE(28), header.readUInt16LE(32), header.readUInt16LE(34)], [1, 2, 48000, 192000, 4, 16]);
   assert.equal(header.toString('ascii', 36, 40), 'data');
   assert.equal(header.readUInt32LE(40), 1000);
+  const ulaw = wavHeader(500, 'ulaw');
+  assert.deepEqual([ulaw.readUInt16LE(20), ulaw.readUInt16LE(22), ulaw.readUInt32LE(24), ulaw.readUInt32LE(28), ulaw.readUInt16LE(32), ulaw.readUInt16LE(34)], [7, 2, 48000, 96000, 2, 8]);
 });
 
 test('FFmpeg reads only the loopback source, seeks only when needed and converts the chosen stream', () => {
@@ -81,6 +83,8 @@ test('FFmpeg reads only the loopback source, seeks only when needed and converts
   assert.equal(later[later.indexOf('-protocol_whitelist') + 1], 'http,tcp');
   assert.ok(!later[later.indexOf('-format_whitelist') + 1].includes('hls'), 'Playlists could fetch other addresses');
   assert.deepEqual(later.slice(-2), ['s16le', 'pipe:1']);
+  const ulaw = decodeArgs('http://127.0.0.1:1/s', 0, 0, 'ulaw');
+  assert.deepEqual(ulaw.slice(-4), ['pcm_mulaw', '-f', 'mulaw', 'pipe:1']);
   const streams = [{ disposition: { default: 0 } }, { disposition: { default: 1 } }];
   assert.equal(chooseStream(streams, 1), 0);
   assert.equal(chooseStream(streams, undefined), 1);
@@ -90,7 +94,7 @@ test('FFmpeg reads only the loopback source, seeks only when needed and converts
 
 test('byte ranges map to exact source times, including ranges that start inside a frame', async t => {
   const tools = fakeTools(), dataBytes = SAMPLE_RATE * 4 * 4;
-  const base = await wavServer(t, tools, { source, stream: 0, startTime: 0, dataBytes });
+  const base = await wavServer(t, tools, { format: 'pcm', source, stream: 0, startTime: 0, dataBytes });
   const head = await fetch(base + '/wav', range(0, 99));
   assert.equal(head.status, 206);
   assert.equal(head.headers.get('content-range'), `bytes 0-99/${HEADER_BYTES + dataBytes}`);
@@ -109,7 +113,7 @@ test('byte ranges map to exact source times, including ranges that start inside 
 
 test('silence fills the time before the source starts and after its audio ends', async t => {
   const tools = fakeTools({ sourceFrames: SAMPLE_RATE / 2 }), dataBytes = SAMPLE_RATE * 4 * 2;
-  const base = await wavServer(t, tools, { source, stream: 0, startTime: 0.25, dataBytes });
+  const base = await wavServer(t, tools, { format: 'pcm', source, stream: 0, startTime: 0.25, dataBytes });
   const lead = SAMPLE_RATE / 4 * 4;
   const edge = Buffer.from(await (await fetch(base + '/wav', range(HEADER_BYTES + lead - 4, HEADER_BYTES + lead + 3))).arrayBuffer());
   assert.deepEqual([...edge], [0, 0, 0, 0, ...frameBytes(0)], 'Source frame 0 plays at 0.25 s');
@@ -118,9 +122,18 @@ test('silence fills the time before the source starts and after its audio ends',
   assert.deepEqual([...Buffer.from(await tail.arrayBuffer())], [0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
+test('μ-law fills silence with 0xFF, since a zero byte is a near-full-scale sample', async t => {
+  const tools = fakeTools({ sourceFrames: 0 }), dataBytes = SAMPLE_RATE * 2;
+  const base = await wavServer(t, tools, { format: 'ulaw', source, stream: 0, startTime: 0.5, dataBytes });
+  const body = Buffer.from(await (await fetch(base + '/wav', range(0, HEADER_BYTES + 5))).arrayBuffer());
+  assert.deepEqual(body.subarray(0, HEADER_BYTES), wavHeader(dataBytes, 'ulaw'));
+  assert.deepEqual([...body.subarray(HEADER_BYTES)], [255, 255, 255, 255, 255, 255]);
+  assert.equal(tools.calls.length, 0, 'Only silence was requested');
+});
+
 test('a decoder failure aborts the read instead of serving silence; HEAD and bad ranges spawn nothing', async t => {
   const tools = fakeTools({ sourceFrames: 10, exitCode: 1 }), dataBytes = SAMPLE_RATE * 4;
-  const base = await wavServer(t, tools, { source, stream: 0, startTime: 0, dataBytes });
+  const base = await wavServer(t, tools, { format: 'pcm', source, stream: 0, startTime: 0, dataBytes });
   const warn = t.mock.method(console, 'warn', () => {});
   const failed = await fetch(base + '/wav', range(0));
   await assert.rejects(failed.arrayBuffer());
@@ -133,7 +146,7 @@ test('a decoder failure aborts the read instead of serving silence; HEAD and bad
 
 test('closing a read stops its decoder', async t => {
   const tools = fakeTools({ sourceFrames: SAMPLE_RATE * 3600 });
-  const base = await wavServer(t, tools, { source, stream: 0, startTime: 0, dataBytes: SAMPLE_RATE * 4 * 3600 });
+  const base = await wavServer(t, tools, { format: 'pcm', source, stream: 0, startTime: 0, dataBytes: SAMPLE_RATE * 4 * 3600 });
   const controller = new AbortController();
   const response = await fetch(base + '/wav', { ...range(0), signal: controller.signal });
   const reader = response.body.getReader();

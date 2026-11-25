@@ -210,21 +210,28 @@ test('unsupported metadata degrades to empty adapter options while explicit canc
   assert.equal(requests, 1);
 });
 
-test('an undecodable direct-file audio track switches to server-converted audio beside the original video', async t => {
+for (const [pcm, format, codec] of [[true, 'pcm', 'pcm-s16'], [false, 'ulaw', 'ulaw']])
+test(`an undecodable direct-file audio track switches to server-converted ${format} audio beside the original video`, async t => {
   const posts = [];
   fixture(t, async (target, init) => {
     if (init?.method === 'DELETE') return Response.json({ ok: true });
     if (init?.method === 'POST') { posts.push({ target: String(target), body: JSON.parse(init.body) }); return Response.json({ url: '/api/media/converted', codec: 'eac3' }); }
     return rangeResponse(init);
   });
+  const oldDecoder = globalThis.AudioDecoder;
+  globalThis.AudioDecoder = { isConfigSupported: async config => ({ supported: pcm && config.codec === 'pcm-s16' }) };
+  t.after(() => { if (oldDecoder === undefined) delete globalThis.AudioDecoder; else globalThis.AudioDecoder = oldDecoder; });
   const controller = new AbortController();
   t.after(() => controller.abort());
   const playback = { type: 'video', url, provider: 'moviebox', settings: { audioTrackId: 'file-audio-2' } }, item = { id: 'film', type: 'movie', source: 'fixture', connectionId: 'box' };
   const adapter = await createTesPlayAdapter(playback, item, controller.signal);
   assert.equal(adapter.session.selectedAudioTrackId, 'file-audio-2');
   const session = await adapter.services.requestCompatibility(adapter.session.id, 'audio-only', 'Audio codec is unsupported by this browser', controller.signal, 0, adapter.session.generationId);
-  assert.deepEqual(posts, [{ target: '/api/media/file/audio-compat', body: { trackNumber: 2 } }]);
+  assert.deepEqual(posts, [{ target: '/api/media/file/audio-compat', body: { trackNumber: 2, format } }]);
   assert.equal(session.streamKind, 'dual-input');
+  // The engine reloads with its preferred audio track and rejects a session without it.
+  assert.equal(session.selectedAudioTrackId, 'file-audio-2');
+  assert.deepEqual(session.tracks.map(track => [track.id, track.codec, track.selector]), [['file-audio-2', codec, { kind: 'endpoint', resourceId: 'sound' }]]);
   assert.deepEqual(session.endpoints.map(e => [e.role, new URL(e.accessUrl, 'https://tesplay.test/').pathname]), [['video', '/api/media/file'], ['audio', '/api/media/converted']]);
   await assert.rejects(adapter.services.requestCompatibility(session.id, 'full', 'Video codec is unsupported by this browser', controller.signal, 0, session.generationId), /Plex titles/);
   assert.equal(posts.length, 1, 'Full conversion is not offered for non-Plex sources');

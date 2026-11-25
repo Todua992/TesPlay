@@ -178,8 +178,13 @@ export async function createTesPlayAdapter(playback: Playback, item: MediaItem, 
       const ticket = source.origin === location.origin ? /^\/api\/(?:v1\/)?media\/([A-Za-z0-9_-]+)$/.exec(source.pathname)?.[1] : undefined;
       if (mode === 'audio-only' && root.provider !== 'plex' && root.type === 'video' && (root.streamKind || 'direct-file') === 'direct-file' && !root.audioUrl && !root.isLive && ticket) {
         const trackNumber = Number(/^file-audio-(\d+)$/.exec(current.selectedAudioTrackId || '')?.[1]) || undefined;
-        const converted = await api<{ url: string }>(`/media/${ticket}/audio-compat`, { trackNumber }, 'POST', operationSignal);
-        const replacement: Playback = { ...root, audioUrl: converted.url, streamKind: 'dual-input' };
+        // 8-bit μ-law has been in WebCodecs since Chrome 93; older builds may lack 16-bit PCM.
+        const pcm = typeof AudioDecoder !== 'undefined' && await AudioDecoder.isConfigSupported({ codec: 'pcm-s16', sampleRate: 48000, numberOfChannels: 2 }).then(result => result.supported === true, () => false);
+        const converted = await api<{ url: string }>(`/media/${ticket}/audio-compat`, { trackNumber, format: pcm ? 'pcm' : 'ulaw' }, 'POST', operationSignal);
+        // The engine reloads with the same preferred audio track, so the converted track keeps its identity.
+        const previous = current.tracks.find(track => track.kind === 'audio' && track.id === current.selectedAudioTrackId);
+        const replacement: Playback = { ...root, audioUrl: converted.url, streamKind: 'dual-input',
+          ...(previous ? { audioTracks: [{ id: previous.id, label: previous.label || previous.language || 'Audio', language: previous.language || undefined, codec: pcm ? 'pcm-s16' : 'ulaw' }], selectedAudioTrackId: previous.id } : {}) };
         fileTracks = undefined; representationId = undefined;
         const session = await prepare(replacement, 'auto', operationSignal);
         operationSignal.throwIfAborted();

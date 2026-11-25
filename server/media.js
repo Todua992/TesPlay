@@ -706,7 +706,7 @@ export function createMediaService(ctx) {
         allowedPrivateHosts: item.allowedPrivateHosts,
         headers: async () => (item.getHeaders ? await item.getHeaders(req, connection) : item.headers) || {},
       };
-      const audio = await audioCompat.probe(source, req.body?.trackNumber);
+      const audio = await audioCompat.probe(source, req.body?.trackNumber, req.body?.format);
       const url = register(req, connection, {
         kind: "audio-compat",
         source,
