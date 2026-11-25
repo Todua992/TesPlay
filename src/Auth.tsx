@@ -9,6 +9,10 @@ import {
   Smartphone,
   Keyboard,
   RefreshCw,
+  MonitorPlay,
+  Server,
+  Users,
+  Clapperboard,
 } from "lucide-react";
 import { api, errorMessage } from "./api";
 import { Brand } from "./components";
@@ -16,6 +20,7 @@ import type { Auth } from "./types";
 import PlaybackDefaultsFields from './PlaybackDefaultsFields';
 import { defaultPlayerPreferences } from './player-preferences';
 import QrCode, { isLocalOnlyUrl } from "./QrCode";
+import AuthScene from "./AuthScene";
 import "./auth.css";
 export default function AuthScreen({
   auth,
@@ -59,134 +64,206 @@ export default function AuthScreen({
     <div
       className={`auth-screen ${manual ? "" : "auth-qr"} ${approvalPending || new URLSearchParams(location.search).get("phone") === "1" ? "auth-phone" : ""}`}
     >
-      <header className="auth-header">
-        <Brand />
-      </header>
-      <main className="auth-main">
-        <div className="auth-intro">
-          <span className="eyebrow">Made for the Tesla browser</span>
-          <h1>Your own libraries<br />on the Tesla screen</h1>
-          <p>Films, shows and live channels from your own accounts, in the Tesla browser. Sign in once with your phone.</p>
-          <div className="auth-library-strip" aria-label="Supported libraries"><span>Plex</span><span>IPTV</span><span>YouTube</span><span>Drive</span><span>Stremio</span><span>MovieBox Pro</span></div>
-        </div>
-        <div className="auth-card">
-          <span className="small-caps">Your account</span>
-          <h2>
-            {auth.setupRequired
-              ? "Create the owner account"
-              : "Sign in to TesPlay"}
-          </h2>
-          <p>
-            {auth.setupRequired
-              ? "Create the owner account for your personal cinema."
-              : "Sign in to your library and saved connections."}
-          </p>
-          {!manual && (
-            <QrLogin onAuth={onAuth} setupRequired={auth.setupRequired} />
-          )}
-          {manual && (
-            <form onSubmit={submit}>
-              {auth.setupRequired && (
-                <label>
-                  Your name
-                  <input
-                    name="name"
-                    autoComplete="name"
-                    required
-                    placeholder="First name"
-                    maxLength={60}
-                  />
-                </label>
-              )}
-              <label>
-                Username
-                <input
-                  name="username"
-                  autoComplete="username"
-                  type="text"
-                  required
-                  placeholder={auth.setupRequired ? "Choose a username" : "Username or existing email"}
-                />
-              </label>
-              <label>
-                Password
-                <div className="password-wrap">
-                  <input
-                    name="password"
-                    type={show ? "text" : "password"}
-                    autoComplete={
-                      auth.setupRequired ? "new-password" : "current-password"
-                    }
-                    minLength={auth.setupRequired ? 12 : 1}
-                    required
-                    placeholder={
-                      auth.setupRequired
-                        ? "At least 12 characters"
-                        : "Your password"
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={show ? "Hide password" : "Show password"}
-                    onClick={() => setShow(!show)}
-                  >
-                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </label>
-              {auth.setupRequired && (
-                <label>
-                  Server setup code
-                  <input
-                    name="setupToken"
-                    type="password"
-                    required
-                    placeholder="Code shown when the server starts"
-                  />
-                  <small>
-                    Find this one-time code in your server’s startup output.
-                  </small>
-                </label>
-              )}
-              {auth.setupRequired && <PlaybackDefaultsFields value={playbackDefaults} onChange={setPlaybackDefaults} disabled={busy} />}
-              {error && (
-                <div className="form-error" role="alert">
-                  {error}
-                </div>
-              )}
-              <button className="button primary full" disabled={busy}>
-                {busy ? <LoaderCircle className="spin" size={19} /> : null}
-                {auth.setupRequired ? "Create your account" : "Sign in"}
-                <ArrowRight size={18} />
-              </button>
-            </form>
-          )}
-          {!approvalPending && (
-            <button
-              className="text-button qr-auth-mode"
-              onClick={() => {
-                setManual(!manual);
-                setError("");
-              }}
-            >
-              {manual ? <Smartphone size={18} /> : <Keyboard size={18} />}
-              {manual
-                ? "Sign in with your phone"
-                : auth.setupRequired
-                  ? "Create account on this device"
-                  : "Use username and password"}
-            </button>
-          )}
-          <div className="privacy-note">
-            <LockKeyhole size={14} /> Your connected accounts stay private
+      <section className="auth-hero">
+        <AuthScene />
+        <header className="auth-header">
+          <Brand />
+        </header>
+        <main className="auth-main">
+          <div className="auth-intro">
+            <span className="auth-kicker">Made for the Tesla browser</span>
+            <h1>Your own libraries<br />on the Tesla screen</h1>
+            <p>TesPlay is a media hub you run on your own server. It brings your Plex, IPTV, YouTube, Google Drive, Stremio and MovieBox Pro libraries together and plays them in the Tesla browser.</p>
+            <ul className="auth-facts">
+              <li><Smartphone size={18} />Sign in with your phone, no typing on the touchscreen</li>
+              <li><MonitorPlay size={18} />The rear screen plays, your phone is the remote</li>
+              <li><Server size={18} />Your accounts stay on your own server</li>
+            </ul>
           </div>
-        </div>
-      </main>
+          <div className="auth-card">
+            <span className="small-caps">Your account</span>
+            <h2>
+              {auth.setupRequired
+                ? "Create the owner account"
+                : "Sign in to TesPlay"}
+            </h2>
+            <p>
+              {auth.setupRequired
+                ? "Create the owner account for your personal cinema."
+                : "Sign in to your library and saved connections."}
+            </p>
+            {!manual && (
+              <QrLogin onAuth={onAuth} setupRequired={auth.setupRequired} />
+            )}
+            {manual && (
+              <form onSubmit={submit}>
+                {auth.setupRequired && (
+                  <label>
+                    Your name
+                    <input
+                      name="name"
+                      autoComplete="name"
+                      required
+                      placeholder="First name"
+                      maxLength={60}
+                    />
+                  </label>
+                )}
+                <label>
+                  Username
+                  <input
+                    name="username"
+                    autoComplete="username"
+                    type="text"
+                    required
+                    placeholder={auth.setupRequired ? "Choose a username" : "Username or existing email"}
+                  />
+                </label>
+                <label>
+                  Password
+                  <div className="password-wrap">
+                    <input
+                      name="password"
+                      type={show ? "text" : "password"}
+                      autoComplete={
+                        auth.setupRequired ? "new-password" : "current-password"
+                      }
+                      minLength={auth.setupRequired ? 12 : 1}
+                      required
+                      placeholder={
+                        auth.setupRequired
+                          ? "At least 12 characters"
+                          : "Your password"
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={show ? "Hide password" : "Show password"}
+                      onClick={() => setShow(!show)}
+                    >
+                      {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </label>
+                {auth.setupRequired && (
+                  <label>
+                    Server setup code
+                    <input
+                      name="setupToken"
+                      type="password"
+                      required
+                      placeholder="Code shown when the server starts"
+                    />
+                    <small>
+                      Find this one-time code in your server’s startup output.
+                    </small>
+                  </label>
+                )}
+                {auth.setupRequired && <PlaybackDefaultsFields value={playbackDefaults} onChange={setPlaybackDefaults} disabled={busy} />}
+                {error && (
+                  <div className="form-error" role="alert">
+                    {error}
+                  </div>
+                )}
+                <button className="button primary full" disabled={busy}>
+                  {busy ? <LoaderCircle className="spin" size={19} /> : null}
+                  {auth.setupRequired ? "Create your account" : "Sign in"}
+                  <ArrowRight size={18} />
+                </button>
+              </form>
+            )}
+            {!approvalPending && (
+              <button
+                className="text-button qr-auth-mode"
+                onClick={() => {
+                  setManual(!manual);
+                  setError("");
+                }}
+              >
+                {manual ? <Smartphone size={18} /> : <Keyboard size={18} />}
+                {manual
+                  ? "Sign in with your phone"
+                  : auth.setupRequired
+                    ? "Create account on this device"
+                    : "Use username and password"}
+              </button>
+            )}
+            <div className="privacy-note">
+              <LockKeyhole size={14} /> Your connected accounts stay private
+            </div>
+          </div>
+        </main>
+      </section>
+      <AuthGuide />
       <footer className="auth-footer">
         <span>Self-hosted on your own server</span>
+        <span>Use the front screen only while parked</span>
         <span>Not affiliated with Tesla</span>
       </footer>
+    </div>
+  );
+}
+
+const steps = [
+  { title: "Run it on your server", body: "Install TesPlay with Docker or Node.js on a computer you own. Your libraries, history and passwords stay there." },
+  { title: "Connect your libraries", body: "Add the services you already use. Scan a code to type passwords and API keys on your phone instead of the car." },
+  { title: "Open it in the car", body: "Go to your TesPlay address in the Tesla browser, scan the code with your phone and approve the screen." },
+];
+const sources = [
+  { name: "Plex", body: "Your Plex server and Plex Home profiles, with Plex transcoding when a file needs it" },
+  { name: "IPTV", body: "Live channels, films and series from an Xtream Codes provider or an M3U playlist" },
+  { name: "YouTube", body: "Subscriptions, playlists, search and what is popular where you live" },
+  { name: "Google Drive", body: "Video files from your Drive, streamed through your server" },
+  { name: "Stremio", body: "The catalogs and streams from your Stremio addons" },
+  { name: "MovieBox Pro", body: "Films and series from your MovieBox Pro account, signed in with a code" },
+];
+const features = [
+  { Icon: Clapperboard, title: "A player made for the car", body: "TesPlayer decodes video in the browser and draws it itself, with subtitles, audio tracks and resume. Dolby audio the browser cannot play is converted on your server." },
+  { Icon: MonitorPlay, title: "Rear screen, phone remote", body: "On a supported rear screen TesPlay becomes the player. Passengers browse, play and pause from their own phone." },
+  { Icon: Users, title: "Profiles for everyone", body: "Each profile keeps its own list, history and place in every film and episode." },
+  { Icon: LockKeyhole, title: "Private by design", body: "Provider passwords and API keys are stored encrypted on your server. The car only ever sees TesPlay." },
+];
+
+/** What TesPlay is and how to start, below the sign-in. */
+function AuthGuide() {
+  return (
+    <div className="auth-guide">
+      <section className="auth-section" aria-labelledby="auth-how">
+        <h2 id="auth-how">How it works</h2>
+        <ol className="auth-steps">
+          {steps.map((step, index) => (
+            <li key={step.title}>
+              <span className="auth-step-number">{index + 1}</span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section className="auth-section" aria-labelledby="auth-sources">
+        <h2 id="auth-sources">What you can connect</h2>
+        <dl className="auth-sources">
+          {sources.map((source) => (
+            <div key={source.name}>
+              <dt>{source.name}</dt>
+              <dd>{source.body}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <section className="auth-section" aria-labelledby="auth-car">
+        <h2 id="auth-car">In the car</h2>
+        <div className="auth-features">
+          {features.map(({ Icon, title, body }) => (
+            <article key={title}>
+              <span className="auth-feature-icon"><Icon size={20} /></span>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
