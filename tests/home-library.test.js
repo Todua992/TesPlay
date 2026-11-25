@@ -43,21 +43,22 @@ test('IPTV home requests only starred live categories alongside recent movie and
   const empty=await loadHomeConnection(connection('m3u'),()=>{throw Error('No unstarred channels should be requested');},new AbortController().signal);
   assert.deepEqual(empty.shelves,[]);assert.deepEqual(empty.issues,[]);
 });
-test('YouTube home shows You may like before subscriptions and reports missing authorization', async () => {
+test('YouTube home shows You may like and Popular in Denmark before subscriptions and reports missing authorization', async () => {
   const paths = [];
   const c = { ...connection('youtube'), authMode: 'oauth', oauthAuthorized: true };
-  const result = await loadHomeConnection(c, async p => { paths.push(p); return p.endsWith('/popular') ? { items: [item('Popular in Denmark', 'video', 'youtube')] } : { items: [item('Subscribed upload', 'video', 'youtube')], partial: true }; }, new AbortController().signal);
+  const rows = { items: [], rows: [{ id: 'you-may-like', title: 'You may like', items: [item('Gaming hit', 'video', 'youtube')] }, { id: 'popular', title: 'Popular in Denmark', items: [item('Danish hit', 'video', 'youtube')] }] };
+  const result = await loadHomeConnection(c, async p => { paths.push(p); return p.endsWith('/popular') ? rows : { items: [item('Subscribed upload', 'video', 'youtube')], partial: true }; }, new AbortController().signal);
   assert.deepEqual(paths, ['/youtube/youtube/popular', '/youtube/youtube/feed']);
-  assert.deepEqual(result.shelves.map(s => [s.title, s.items[0].title]), [['YouTube · You may like', 'Popular in Denmark'], ['YouTube · Starred channels', 'Subscribed upload']]);
+  assert.deepEqual(result.shelves.map(s => [s.title, s.items[0].title]), [['YouTube · You may like', 'Gaming hit'], ['YouTube · Popular in Denmark', 'Danish hit'], ['YouTube · Starred channels', 'Subscribed upload']]);
   assert.equal(result.issues.length, 1);
   const publicPaths = [];
-  const publicOnly = await loadHomeConnection({ ...c, authMode: 'apiKey' }, async p => { publicPaths.push(p); return { items: [item('Popular in Denmark', 'video', 'youtube')] }; }, new AbortController().signal);
+  const publicOnly = await loadHomeConnection({ ...c, authMode: 'apiKey' }, async p => { publicPaths.push(p); return rows; }, new AbortController().signal);
   assert.deepEqual(publicPaths, ['/youtube/youtube/popular'], 'Subscriptions need Google');
-  assert.deepEqual(publicOnly.shelves.map(s => s.title), ['YouTube · You may like']);
+  assert.deepEqual(publicOnly.shelves.map(s => s.title), ['YouTube · You may like', 'YouTube · Popular in Denmark']);
   assert.match(publicOnly.issues[0], /Connect Google/);
   const failed = await loadHomeConnection(c, async p => { if (p.endsWith('/popular')) throw Error('quota'); return { items: [item('Subscribed upload', 'video', 'youtube')] }; }, new AbortController().signal);
   assert.deepEqual(failed.shelves.map(s => s.title), ['YouTube · Starred channels'], 'Subscriptions still load');
-  assert.deepEqual(failed.issues, ['You may like: quota']);
+  assert.deepEqual(failed.issues, ['Popular videos: quota']);
 });
 test('Drive and local home previews bound folder expansion and preserve direct files', async () => {
   for (const type of ['drive', 'local']) {
@@ -162,5 +163,5 @@ test('Home preview survives a reload, isolates identities and invalidates change
   assert.equal(readHomePreview('owner:profile',c,[{connectionId:c.id,id:'live:1',kind:'category'}],storage),undefined);
   writeHomePreview('owner:profile',c,[],{shelves:[],issues:['524']},storage);
   assert.deepEqual(readHomePreview('owner:profile',c,[],storage),result);
-  values.set('tesplay:home:v1:owner:profile','invalid JSON');assert.equal(readHomePreview('owner:profile',c,[],storage),undefined);
+  values.set('tesplay:home:v2:owner:profile','invalid JSON');assert.equal(readHomePreview('owner:profile',c,[],storage),undefined);
 });

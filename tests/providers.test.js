@@ -1329,11 +1329,13 @@ test('YouTube personal browsing uses OAuth, paginates subscriptions and opens ch
   assert.equal((await f.request(`/api/youtube/${publicId}/feed`)).status, 409);
 });
 
-test('YouTube "You may like" mixes the regional chart with charts for watched categories, without an account or watched videos', async t => {
+test('YouTube "You may like" uses charts for watched categories and "Popular in Denmark" the regional chart, without an account or watched videos', async t => {
   const charts = [];
-  const watchedId = 'watchedvid1', progress = [{ item: { id: watchedId, connectionId: '1', type: 'video' }, seconds: 10, duration: 100 }];
+  const watchedId = 'watchedvid1';
+  let progress = [{ item: { id: watchedId, connectionId: '1', type: 'video' }, seconds: 10, duration: 100 }];
   const entry = (id, title, duration = 'PT4M') => ({ id, contentDetails: { duration }, snippet: { title, channelTitle: 'Channel', channelId: 'UC' + 'b'.repeat(22), thumbnails: {} } });
-  const f = await fixture(t, { library: { progress }, remoteData: async input => {
+  const library = { get progress() { return progress; } };
+  const f = await fixture(t, { library, remoteData: async input => {
     const u = new URL(input);
     assert.equal(u.searchParams.get('key'), 'public-key');
     if (u.searchParams.get('id')) { assert.equal(u.searchParams.get('id'), watchedId); return { items: [{ id: watchedId, snippet: { categoryId: '20' } }] }; }
@@ -1341,17 +1343,24 @@ test('YouTube "You may like" mixes the regional chart with charts for watched ca
     assert.equal(u.searchParams.get('regionCode'), 'DK');
     const category = u.searchParams.get('videoCategoryId');
     charts.push(category);
-    return category === '20'
-      ? { items: [entry('gamingvid01', 'Gaming hit'), entry('sharedvid01', 'Everywhere'), entry(watchedId, 'Already watched')] }
-      : { items: [entry('popularvid1', 'Danish hit', 'PT1H2M'), entry('sharedvid01', 'Everywhere')] };
+    if (!category) return { items: [entry('popularvid1', 'Danish hit', 'PT1H2M'), entry('sharedvid01', 'Everywhere'), entry(watchedId, 'Already watched')] };
+    return { items: [entry(`cat${category}video0`, `Category ${category} hit`), entry('sharedvid01', 'Everywhere'), entry(watchedId, 'Already watched')] };
   } });
   const id = f.add('youtube', { authMode: 'apiKey', apiKey: 'public-key' });
   const result = await (await f.request(`/api/youtube/${id}/popular`)).json();
   assert.deepEqual(charts.sort(), ['20', null]);
   assert.deepEqual(result.categories, ['20']);
-  assert.deepEqual(result.items.map(item => item.id), ['gamingvid01', 'popularvid1', 'sharedvid01'], 'Interleaved, deduplicated and without watched videos');
-  assert.equal(result.items[1].duration, 3720);
+  assert.deepEqual(result.rows.map(row => [row.title, row.items.map(item => item.id)]), [
+    ['You may like', ['cat20video0', 'sharedvid01']],
+    ['Popular in Denmark', ['popularvid1']],
+  ], 'No watched videos, and nothing twice');
+  assert.equal(result.rows[1].items[0].duration, 3720);
   assert.ok(!JSON.stringify(result).includes('public-key'));
+  progress = [];
+  charts.length = 0;
+  const fresh = await (await f.request(`/api/youtube/${id}/popular`)).json();
+  assert.deepEqual(fresh.categories, ['10', '24', '20'], 'Broad categories stand in until there is history');
+  assert.deepEqual(fresh.rows[0].items.map(item => item.id).slice(0, 3), ['cat10video0', 'cat24video0', 'cat20video0']);
 });
 
 test('YouTube search returns matching channels above videos with decoded titles and unchanged video IDs',async t=>{

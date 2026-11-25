@@ -14,7 +14,7 @@ export function bundleIptvHomeShelves(shelves:HomeShelf[], connections:Connectio
   return result;
 }
 export type HomeResult = { shelves: HomeShelf[]; issues: string[] };
-export type HomeCatalog = { items: MediaItem[]; catalogs?: {id:string;name:string;type:string}[]; partial?: boolean; nextOffset?: number | null; channelRows?: {id:string;title:string;items:MediaItem[]}[] };
+export type HomeCatalog = { items: MediaItem[]; rows?: {id:string;title:string;items:MediaItem[]}[]; catalogs?: {id:string;name:string;type:string}[]; partial?: boolean; nextOffset?: number | null; channelRows?: {id:string;title:string;items:MediaItem[]}[] };
 type Request = (path: string, signal: AbortSignal) => Promise<HomeCatalog>;
 const message = (e: unknown) => e instanceof Error ? e.message : 'The library could not load.';
 
@@ -36,7 +36,7 @@ export async function loadHomeConnection(c: Connection, request: Request, signal
         (result,index)=>shelf(catalogs[index].id,catalogs[index].name,result.items,{kind:catalogs[index].type,category:catalogs[index].id}));
     } else if (c.type === 'youtube') {
       // Popular videos need no Google account; starred channels do.
-      collect(await Promise.allSettled([request(`/youtube/${encodeURIComponent(c.id)}/popular`, signal)]), ['You may like'], r => { if (r.items.length) shelf('you-may-like', 'YouTube · You may like', r.items); });
+      collect(await Promise.allSettled([request(`/youtube/${encodeURIComponent(c.id)}/popular`, signal)]), ['Popular videos'], r => { for (const row of r.rows || []) shelf(`popular:${row.id}`, `YouTube · ${row.title}`, row.items); });
       if (c.authMode !== 'oauth' || !c.oauthAuthorized) return { shelves, issues: [...issues, 'Connect Google in YouTube settings to load your subscription videos.'] };
       const offsets=new Set<number>(); let offset: number | undefined;
       do {
@@ -110,11 +110,13 @@ export function mergeHomeResult(previous:HomeResult|undefined,next:HomeResult):H
  return {...next,shelves:[...shelves.values()]};
 }
 
+// Bump when a provider's Home shelves change, so a saved preview cannot hide new rows.
+const HOME_PREVIEW='tesplay:home:v2:';
 // A reload reuses the browser's last successful Home preview. Provider catalogs
 // are cached on the server as well; this snapshot avoids a loading interstitial.
 export function readHomePreview(identity:string, c:Connection, stars:Starred[], storage:Pick<Storage,'getItem'>):HomeResult|undefined {
   try {
-    const saved=JSON.parse(storage.getItem(`tesplay:home:v1:${identity}`)||'{}')[c.id];
+    const saved=JSON.parse(storage.getItem(HOME_PREVIEW+identity)||'{}')[c.id];
     if(saved?.fingerprint!==homePreviewFingerprint(c,stars)||!Array.isArray(saved.result?.shelves))return;
     if(saved.result.shelves.some((s:HomeShelf)=>s.connectionId!==c.id||typeof s.id!=='string'||typeof s.title!=='string'||!Array.isArray(s.items)||s.items.some(i=>typeof i.id!=='string'||typeof i.title!=='string')))return;
     return {shelves:saved.result.shelves,issues:[]};
@@ -123,7 +125,7 @@ export function readHomePreview(identity:string, c:Connection, stars:Starred[], 
 export function writeHomePreview(identity:string,c:Connection,stars:Starred[],result:HomeResult,storage:Pick<Storage,'getItem'|'setItem'>):void {
   if(result.issues.length&&!result.shelves.length)return;
   try {
-    const key=`tesplay:home:v1:${identity}`,saved=JSON.parse(storage.getItem(key)||'{}');
+    const key=HOME_PREVIEW+identity,saved=JSON.parse(storage.getItem(key)||'{}');
     saved[c.id]={fingerprint:homePreviewFingerprint(c,stars),result:{shelves:result.shelves,issues:[]}};
     const json=JSON.stringify(saved);if(json.length<2_000_000)storage.setItem(key,json);
   } catch { /* Private browsing and full storage still use the server catalog. */ }
@@ -135,7 +137,7 @@ function homePreviewFingerprint(c:Connection,stars:Starred[]):string {
 export function invalidateHomePreview(connectionId:string):void {
   try {
     for(let i=0;i<sessionStorage.length;i++){
-      const key=sessionStorage.key(i);if(!key?.startsWith('tesplay:home:v1:'))continue;
+      const key=sessionStorage.key(i);if(!key?.startsWith(HOME_PREVIEW))continue;
       const saved=JSON.parse(sessionStorage.getItem(key)||'{}');delete saved[connectionId];sessionStorage.setItem(key,JSON.stringify(saved));
     }
   } catch { /* Optional browser snapshot. */ }

@@ -13,7 +13,7 @@ type BrowsePane = Exclude<Pane, 'search'>;
 type Collection = { id:string;title:string;thumbnail?:string;videoCount?:number };
 type ChannelRow = {id:string;title:string;items:MediaItem[]};
 type Cursor = {token?:string;offset?:number};
-type Result = {items?:MediaItem[];channels?:Collection[];playlists?:Collection[];channelRows?:ChannelRow[];nextPageToken?:string|null;nextOffset?:number|null;partial?:boolean;total?:number;totalChannels?:number};
+type Result = {items?:MediaItem[];rows?:ChannelRow[];channels?:Collection[];playlists?:Collection[];channelRows?:ChannelRow[];nextPageToken?:string|null;nextOffset?:number|null;partial?:boolean;total?:number;totalChannels?:number};
 
 const tabs=[['suggestions','For you',Sparkles],['subscriptions','Subscriptions',Users],['playlists','Playlists',ListVideo],['history','Watched',Clock]] as const;
 const paneLabel:Record<BrowsePane,string>={suggestions:'For you',subscriptions:'Subscriptions',playlists:'Playlists',history:'Watched'};
@@ -58,8 +58,8 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
   const [collections,setCollections]=useState<Collection[]>([]),[collCursor,setCollCursor]=useState<Cursor|null>(null),[collNext,setCollNext]=useState<Cursor|null>(null);
   const [collBusy,setCollBusy]=useState(false),[total,setTotal]=useState<number|null>(null);
   const [reconnect,setReconnect]=useState(false);
-  // "You may like": popular videos, which need no Google account.
-  const [popular,setPopular]=useState<MediaItem[]>([]),[popularBusy,setPopularBusy]=useState(false);
+  // "You may like" and "Popular in Denmark" rows: charts, which need no Google account.
+  const [popular,setPopular]=useState<ChannelRow[]>([]),[popularBusy,setPopularBusy]=useState(false);
 
   const personal=c?.authMode==='oauth'&&c.oauthAuthorized;
   const searching=pane==='search';
@@ -93,7 +93,7 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
     const controller=new AbortController();
     if(!c||pane!=='suggestions'){setPopularBusy(false);return()=>controller.abort();}
     setPopularBusy(true);
-    void api<Result>(`/youtube/${c.id}/popular`,undefined,undefined,controller.signal).then(r=>{if(!controller.signal.aborted)setPopular(r.items||[]);})
+    void api<Result>(`/youtube/${c.id}/popular`,undefined,undefined,controller.signal).then(r=>{if(!controller.signal.aborted)setPopular(r.rows||[]);})
       .catch(e=>{if(!controller.signal.aborted)fail(e);}).finally(()=>{if(!controller.signal.aborted)setPopularBusy(false);});
     return()=>controller.abort();
   },[c?.id,pane,refresh]);
@@ -140,9 +140,11 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
   const visible=filterYouTubeItems(unfiltered,hideYouTubeShorts,connections,rawLibrary.progress),visibleRows=filterYouTubeShelves(channelRows,hideYouTubeShorts,connections,rawLibrary.progress);
   const showStrip=(stripPane||(searching&&!!query))&&collections.length>0;
   const stripKind:'channel'|'playlist'=pane==='playlists'?'playlist':'channel';
-  const grid=(values:MediaItem[])=>values.length>0&&<div className="catalog-grid youtube-video-grid">{values.map(item=><Card key={itemKey(item)} item={item} onOpen={onOpen} onFavorite={onFavorite} saved={queued.has(itemKey(item))} progress={progress.get(itemKey(item))}/>)}</div>;
-  const videoGrid=grid(visible);
-  const suggested=pane==='suggestions'&&!selection?filterYouTubeItems(popular,hideYouTubeShorts,connections,rawLibrary.progress):[];
+  const videoGrid=visible.length>0&&<div className="catalog-grid youtube-video-grid">{visible.map(item=><Card key={itemKey(item)} item={item} onOpen={onOpen} onFavorite={onFavorite} saved={queued.has(itemKey(item))} progress={progress.get(itemKey(item))}/>)}</div>;
+  const forYou=pane==='suggestions'&&!selection;
+  const popularRows=forYou?filterYouTubeShelves(popular,hideYouTubeShorts,connections,rawLibrary.progress).filter(row=>row.items.length):[];
+  const continuing=forYou&&c?history.filter(p=>p.item.connectionId===c.id&&p.duration>0&&p.seconds>5&&p.seconds/p.duration<0.97).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,12).map(p=>p.item):[];
+  const rowProps={onOpen,onFavorite,isSaved:(i:MediaItem)=>queued.has(itemKey(i)),progress:(i:MediaItem)=>progress.get(itemKey(i))};
   const anyBusy=busy||collBusy||(pane==='suggestions'&&popularBusy);
 
   return <section className="page-section youtube-hub yt-hub">
@@ -184,23 +186,21 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
       {pane==='playlists'&&queue.length>0&&<section className="watch-playlist yt-queue"><div className="section-heading"><div><h2>Up next</h2><p>{queue.length} videos saved to this profile</p></div><div className="row-actions"><button className="text-button" onClick={onClearQueue}>Clear</button><button className="button primary small" onClick={()=>onOpen(queue[0])}><Play size={16} fill="currentColor"/>Play all</button></div></div><ol className="queue-list">{queue.map((item,index)=><li key={itemKey(item)}><span>{index+1}</span><button className="queue-video" onClick={()=>onOpen(item)}>{item.poster&&<img src={item.poster} alt="" loading="lazy"/>}<span><strong>{item.title}</strong><small>{item.subtitle||item.categoryLabel||'YouTube'}</small></span><Play size={17}/></button><button className="icon-button" aria-label={`Remove ${item.title} from playlist`} onClick={()=>onRemoveQueue(item)}><X size={17}/></button></li>)}</ol></section>}
 
       {selection&&<div className="yt-section-title"><h2>{selection.title}</h2>{searching&&<button className="text-button" onClick={()=>{setSelection(null);setCursor(null);}}><X size={15}/>All results</button>}</div>}
-      {suggested.length>0&&<>
-        <div className="yt-section-title"><h2>You may like</h2><RefreshButton label="Refresh YouTube" disabled={busy||popularBusy} onRefresh={()=>{setCursor(null);setRefresh(n=>n+1);}}/></div>
-        {grid(suggested)}
-      </>}
-      {pane==='suggestions'&&!selection&&visibleRows.length>0&&<div className={`yt-section-title ${suggested.length?'yt-section-follows':''}`}><h2>Fresh from your starred channels</h2></div>}
+      {continuing.length>0&&<Row presentation="continue" title="Continue watching" items={continuing} {...rowProps}/>}
+      {popularRows.map(row=><Row key={row.id} title={row.title} items={row.items} {...rowProps}/>)}
+      {forYou&&visibleRows.length>0&&<div className={`yt-section-title ${continuing.length||popularRows.length?'yt-section-follows':''}`}><h2>Fresh from your starred channels</h2><RefreshButton label="Refresh YouTube" disabled={busy||popularBusy} onRefresh={()=>{setCursor(null);setRefresh(n=>n+1);}}/></div>}
       {searching&&!selection&&collections.length>0&&visible.length>0&&<div className="yt-section-title"><h2>Videos</h2></div>}
 
       {pane==='suggestions'&&!selection
         ?visibleRows.map(row=><Row key={row.id} title={row.title} items={row.items} onOpen={onOpen} onFavorite={onFavorite} isSaved={i=>queued.has(itemKey(i))} progress={i=>progress.get(itemKey(i))} more={()=>{setPane('subscriptions');setCollCursor(null);setCollections([]);setSelection({...row,kind:'channel'});setCursor(null);}}/>)
         :videoGrid}
-      {pane==='suggestions'&&!selection&&!anyBusy&&suggested.length>0&&visibleRows.length===0&&<p className="form-help yt-more-hint">
+      {forYou&&!anyBusy&&popularRows.length>0&&visibleRows.length===0&&<p className="form-help yt-more-hint">
         {personal?'Star channels in Subscriptions to add their newest videos here.':'Connect Google to add your starred channels here.'}
         <button className="text-button" onClick={personal?()=>changePane('subscriptions'):onConnect}>{personal?<><Star size={15}/>Star channels</>:'Connect Google'}</button>
       </p>}
 
       {anyBusy&&<Busy label={searching?'Searching YouTube…':'Loading your YouTube…'}/>}
-      {!anyBusy&&!error&&visible.length===0&&visibleRows.length===0&&collections.length===0&&suggested.length===0&&<Empty icon={<YouTubeLogo/>} title={pane==='suggestions'?'Make this space yours':pane==='history'?'Your next watch starts here':searching?'No results':'Nothing here yet'} action={pane==='suggestions'?<button className="button primary" onClick={()=>changePane('subscriptions')}><Star size={17}/>Star your channels</button>:undefined}>{hideYouTubeShorts&&unfiltered.length?'Short videos are hidden. Change this in Settings or load more videos.':pane==='suggestions'?'Star subscriptions to see their latest videos here and on Home.':pane==='history'?'Videos you watch in TesPlay appear here.':searching?'Try different words or paste a video link.':'Choose another channel or playlist.'}</Empty>}
+      {!anyBusy&&!error&&visible.length===0&&visibleRows.length===0&&collections.length===0&&popularRows.length===0&&continuing.length===0&&<Empty icon={<YouTubeLogo/>} title={pane==='suggestions'?'Make this space yours':pane==='history'?'Your next watch starts here':searching?'No results':'Nothing here yet'} action={pane==='suggestions'?<button className="button primary" onClick={()=>changePane('subscriptions')}><Star size={17}/>Star your channels</button>:undefined}>{hideYouTubeShorts&&unfiltered.length?'Short videos are hidden. Change this in Settings or load more videos.':pane==='suggestions'?'Star subscriptions to see their latest videos here and on Home.':pane==='history'?'Videos you watch in TesPlay appear here.':searching?'Try different words or paste a video link.':'Choose another channel or playlist.'}</Empty>}
       {next&&<div className="load-more"><button className="button ghost" disabled={busy} onClick={()=>setCursor(next)}>Load more<ArrowRight size={16}/></button></div>}
     </>}
   </section>;
