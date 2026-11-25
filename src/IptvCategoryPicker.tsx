@@ -30,7 +30,7 @@ export default function IptvCategoryPicker({ categories, type, value, onChange, 
         <Icon size={17}/>{title}<small>{categories.filter(c => c.kind === id && selectedSet.has(c.id)).length}/{categories.filter(c => c.kind === id).length}</small>
       </button>)}
     </div>
-    <div className="inline-search iptv-picker-search"><Search size={18}/><input type="search" value={search} disabled={disabled} aria-label="Search IPTV categories" placeholder="Search categories…" onChange={e => setSearch(e.target.value)}/></div>
+    <div className="inline-search iptv-picker-search"><Search size={18}/><input type="search" value={search} disabled={disabled} aria-label="Search IPTV categories" placeholder="Search categories" onChange={e => setSearch(e.target.value)}/></div>
     <div className="iptv-picker-tools"><span>{visible.length} categories</span><div>
       <button type="button" className="text-button" disabled={disabled || !visible.length} onClick={() => selectVisible(true)}>Select visible</button>
       <button type="button" className="text-button" disabled={disabled || !visible.length} onClick={() => selectVisible(false)}>Clear visible</button>

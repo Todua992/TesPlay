@@ -13,11 +13,6 @@
   flex-shrink: 0;
 }
 
-.mb-search-go {
-  background: #10b981 !important;
-  color: #fff !important;
-}
-
 .mb-suggestions {
   display: flex;
   align-items: center;
@@ -46,9 +41,9 @@
 }
 
 .mb-chip:hover {
-  border-color: #10b981;
+  border-color: var(--line-strong);
   color: var(--text);
-  background: color-mix(in srgb, #10b981 10%, var(--surface));
+  background: var(--raised);
 }
 
 .mb-account-pill {
@@ -67,7 +62,7 @@
 }
 
 .mb-account-pill:hover {
-  border-color: #10b981;
+  border-color: var(--line-strong);
   color: var(--text);
 }
 
@@ -75,7 +70,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #10b981;
+  background: #2fb36d;
 }
 
 .mb-tabs-row {
@@ -140,7 +135,7 @@
   border-radius: 12px;
   background: var(--surface);
   color: var(--text);
-  font: 700 clamp(28px, 7vw, 40px) / 1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 600 clamp(28px, 7vw, 40px) / 1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.18em;
   text-align: center;
   user-select: all;

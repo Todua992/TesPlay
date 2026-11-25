@@ -5,7 +5,7 @@ export const services = [
     subtitle: "Live TV, films & series",
     color: "#9c88ff",
     letters: "TV",
-    description: "Connect your Xtream Codes provider or an M3U playlist.",
+    description: "Connect your Xtream Codes provider or an M3U playlist",
   },
   {
     id: "plex",
@@ -31,7 +31,7 @@ export const services = [
     subtitle: "A world of anime",
     color: "#ff8438",
     letters: "◉",
-    description: "In-app playback is not currently available for this service.",
+    description: "In-app playback is not currently available for this service",
   },
   {
     id: "drive",
@@ -39,7 +39,7 @@ export const services = [
     subtitle: "Your cloud, on the big screen",
     color: "#5fba89",
     letters: "△",
-    description: "Connect your Google account to browse your video files.",
+    description: "Connect your Google account to browse your video files",
   },
   {
     id: "stremio",

@@ -80,7 +80,7 @@ export function PairRemote({
   }, []);
   const link = `${publicUrl}/?remote=${encodeURIComponent(pair?.code || "1")}#token=${encodeURIComponent(pair?.token || "")}`;
   return (
-    <Modal title="Your phone. Your remote." onClose={onClose}>
+    <Modal title="Pair your phone" onClose={onClose}>
       <div className="pair-illustration">
         <Smartphone size={44} />
         <Link size={23} />
@@ -407,8 +407,8 @@ export default function Remote({
           <div className="cinema-pair-icon">
             <Smartphone size={36} />
           </div>
-          <span className="eyebrow">YOUR PHONE. YOUR REMOTE.</span>
-          <h1>Let’s connect.</h1>
+          <span className="eyebrow">Phone remote</span>
+          <h1>Connect to a screen</h1>
           <RemoteConnect onConnected={connected} />
           <p className="form-help">
             Or enter a pairing code from a screen using the same account and
@@ -476,11 +476,11 @@ export default function Remote({
             </div>
             <div className="remote-view" hidden={tab !== "queue"}>
               <section className="cinema-queue" aria-label="Play queue">
-                <span className="eyebrow">MAKE A NIGHT OF IT</span>
+                <span className="eyebrow">Queue</span>
                 <h1>
                   Up next <span>{queue.length}</span>
                 </h1>
-                <p>Choose what plays next on your screen.</p>
+                <p>Choose what plays next on your screen</p>
                 <div className="cinema-queue-actions">
                   <button
                     className="button ghost small"
@@ -532,7 +532,7 @@ export default function Remote({
                   <div className="cinema-empty">
                     <ListVideo size={36} />
                     <h2>A little room for more.</h2>
-                    <p>Add a title from My list, or browse your libraries.</p>
+                    <p>Add a title from My list, or browse your libraries</p>
                     <button
                       className="button primary"
                       onClick={() => setTab("browse")}
@@ -568,10 +568,10 @@ export default function Remote({
                 <div className="cinema-title">
                   <div>
                     <div className="cinema-eyeline">
-                      <span>NOW PLAYING ON YOUR SCREEN</span>
+                      <span>Now playing on your screen</span>
                     </div>
 
-                    <h2>{item?.title || "What are we watching?"}</h2>
+                    <h2>{item?.title || "Nothing playing yet"}</h2>
                     <p>
                       {item
                         ? [
@@ -851,7 +851,7 @@ export default function Remote({
             {!library.favorites.some(
               (item) => !["folder", "series"].includes(item.type),
             ) && (
-              <p>Save titles to My list while browsing, then add them here.</p>
+              <p>Save titles to My list while browsing, then add them here</p>
             )}
           </div>
         </Modal>

@@ -273,7 +273,7 @@ export default function MovieBoxHub({
           <Search size={19} aria-hidden="true" />
           <input
             aria-label="Search MovieBox Pro"
-            placeholder="Search movies and TV series…"
+            placeholder="Search MovieBox Pro"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             enterKeyHint="search"
@@ -283,7 +283,7 @@ export default function MovieBoxHub({
               <X size={18} />
             </button>
           )}
-          <button className="yt-search-go mb-search-go" aria-label="Search">
+          <button className="yt-search-go" aria-label="Search">
             <ArrowRight size={19} />
           </button>
         </form>
@@ -382,6 +382,7 @@ export default function MovieBoxHub({
               isSaved={(i) => favorites.has(itemKey(i))}
               progress={(i) => progress.get(itemKey(i))}
               more={shelf.tab && shelf.tab !== 'discover' ? () => changeTab(shelf.tab as Exclude<Tab, 'search'>) : undefined}
+              showSource={false}
             />
           ))}
           {!busy && !shelves.length && !error && (
@@ -397,6 +398,7 @@ export default function MovieBoxHub({
                 <Card
                   key={itemKey(item)}
                   item={item}
+                  showSource={false}
                   onOpen={onDetails}
                   onFavorite={onFavorite}
                   saved={favorites.has(itemKey(item))}

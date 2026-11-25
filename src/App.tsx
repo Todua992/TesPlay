@@ -619,7 +619,7 @@ export default function App() {
             ref={searchRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search your library…"
+            placeholder="Search your library"
             aria-label="Search titles"
           />
           <button
@@ -645,7 +645,7 @@ export default function App() {
               onUnavailable={() => showToast("Crunchyroll does not currently provide a supported in-app playback integration for TesPlay.")} />
           </Suspense>
         )}
-        {view === "connections" && !(auth.user.canManageConnections ?? auth.user.role === "owner") && <section className="page-section"><div className="page-heading"><div><span className="eyebrow">Shared with you</span><h1>Your connections</h1><p>Your server owner manages these libraries and their settings.</p></div></div><div className="shared-connections">{connections.map(c=><button className="button ghost" key={c.id} onClick={()=>browse(c)}>{c.type==="youtube"?"YouTube":c.name}<ArrowRight size={17}/></button>)}</div>{!connections.length&&<Empty title="No libraries shared yet">Your server owner can give your account access in Accounts & access.</Empty>}</section>}
+        {view === "connections" && !(auth.user.canManageConnections ?? auth.user.role === "owner") && <section className="page-section"><div className="page-heading"><div><span className="eyebrow">Shared with you</span><h1>Your connections</h1><p>Your server owner manages these libraries and their settings</p></div></div><div className="shared-connections">{connections.map(c=><button className="button ghost" key={c.id} onClick={()=>browse(c)}>{c.type==="youtube"?"YouTube":c.name}<ArrowRight size={17}/></button>)}</div>{!connections.length&&<Empty title="No libraries shared yet">Your server owner can give your account access in Accounts & access.</Empty>}</section>}
         {view === "connections" && (auth.user.canManageConnections ?? auth.user.role === "owner") && (
           <Connections
             connections={connections}
@@ -668,7 +668,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">Save it for later</span>
                 <h1>My list</h1>
-                <p>A few things to look forward to.</p>
+                <p>Titles you saved to watch later</p>
               </div>
               <span className="count-pill">
                 {new Set([...library.favorites,...(library.plexWatchlist||[])].map(itemKey)).size} titles
@@ -704,7 +704,7 @@ export default function App() {
                 <h1>Watch history</h1>
                 <p>
                   {activeProfile?.name || "Your profile"}’s playback history and
-                  saved progress.
+                  saved progress
                 </p>
               </div>
               <span className="count-pill" aria-live="polite">
@@ -713,7 +713,7 @@ export default function App() {
               </span>
             </div>
             {library.plexNotes?.map(note=><p className="form-help" role="status" key={note}>{note}</p>)}
-            <button className="text-button" onClick={()=>void loadLibrary().catch(e=>showToast(errorMessage(e)))}><RefreshCw size={16}/>Refresh Plex history and progress</button>
+            <button className="text-button" onClick={()=>void loadLibrary().catch(e=>showToast(errorMessage(e)))}><RefreshCw size={16}/>Refresh history</button>
             {historyTotal ? (
               <div className="catalog-grid" id="watch-history-grid">
                 {library.progress.slice(0, historyLimit).map((entry) => (
@@ -796,7 +796,7 @@ export default function App() {
       <footer className="app-footer">
         <div>
           <Brand />
-          <span>Your screen. Your stories.</span>
+          <span>Self-hosted on your own server</span>
         </div>
         <nav aria-label="Additional navigation">
           <button onClick={() => navigate("connections")}>

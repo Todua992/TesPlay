@@ -67,8 +67,8 @@ export default function Home({ cacheIdentity, connections, library: rawLibrary, 
     </section> : <>
       {featured.length ? <HeroCarousel items={featured} saved={item => favorites.has(itemKey(item))} onOpen={onOpen} onDetails={onDetails} onFavorite={onFavorite}
         kicker={item => spotlight?.items.includes(item) ? spotlight.title : `Featured from ${item.source}`} /> : <section className="page-section home-loading">
-        <span className="eyebrow">Your collection, together</span>
-        <h1>{connections.length ? 'Your library' : 'Your libraries. One screen.'}</h1>
+        <span className="eyebrow">Home</span>
+        <h1>{connections.length ? 'Your library' : 'Connect your first library'}</h1>
         {pending.length ? <Busy label="Loading your collection…" /> : <p>{connections.length ? 'No featured titles yet. Browse a connection below.' : canManage ? 'Bring your films, shows and channels into TesPlay. Start with a library below.' : 'Your server owner can share connections with your account.'}</p>}
       </section>}
       <div className="home-content">

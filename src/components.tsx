@@ -144,10 +144,13 @@ export function Card({
   saved = false,
   progress,
   presentation,
+  showSource = true,
 }: {
   item: MediaItem;
   onOpen: (i: MediaItem) => void;
   onFavorite?: (i: MediaItem) => void;
+  /** The source badge helps in mixed lists; a single-source page turns it off. */
+  showSource?: boolean;
   saved?: boolean;
   progress?: number;
   presentation?: "continue";
@@ -179,7 +182,7 @@ export function Card({
           </span>
         )}
         <span className="card-shade" />
-        {!youtube && <span className="source-badge">{item.source}</span>}
+        {!youtube && showSource && <span className="source-badge">{item.source}</span>}
         {watched && <span className="watched-badge" aria-label="Watched"><Check size={14}/></span>}
         {!hasDetails&&<span className="card-play">
           {item.type === "folder" ? (
@@ -242,6 +245,7 @@ export function Row({
   progress,
   presentation,
   emphasis,
+  showSource,
 }: {
   title: string;
   subtitle?: string;
@@ -254,6 +258,7 @@ export function Row({
   presentation?: "continue";
   /** A bold, larger title for rows that should stand out. */
   emphasis?: boolean;
+  showSource?: boolean;
 }) {
   const rail = useRef<HTMLDivElement>(null);
   return (
@@ -290,6 +295,7 @@ export function Row({
             saved={isSaved?.(item)}
             progress={progress?.(item)}
             presentation={presentation}
+            showSource={showSource}
           />
         ))}
       </div>

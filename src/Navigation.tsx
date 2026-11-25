@@ -50,7 +50,7 @@ export default function Navigation({ view, phone, signedIn, searchOpen, profileO
       <h1 className="topbar-title">{titles[view] ?? ''}</h1>
       {/* YouTube and MovieBox have their own search bars on the page, so the library search would be a duplicate there. */}
       {!['apps', 'moviebox'].includes(view) && <button type="button" className="topbar-search" aria-label="Search library" aria-expanded={searchOpen} onClick={onSearch}>
-        <span>Search movies, series, channels…</span><Search aria-hidden="true" />
+        <span>Search</span><Search aria-hidden="true" />
       </button>}
       <div className="topbar-actions">
         {phone && <button type="button" className="topbar-icon" aria-label="Open remote controls" title="Phone remote" onClick={onRemote}><Smartphone aria-hidden="true" /></button>}

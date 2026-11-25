@@ -16,7 +16,7 @@ export default function StremioSourcesDialog({item,onClose,onPlay}:{item:MediaIt
     return()=>controller.abort();
   },[item.connectionId,item.id,item.type,refresh]);
   return <Modal title={`Watch ${item.title}`} onClose={onClose} className="stremio-sources-dialog">
-    <p>Choose a source to play with TesPlayer.</p>
+    <p>Choose a source to play with TesPlayer</p>
     {loading?<Busy label="Finding your Stremio sources…"/>:<>
       {error&&<p className="form-error" role="alert">{error}</p>}
       {options?.note&&<p className="form-help" role="status">{options.note}</p>}

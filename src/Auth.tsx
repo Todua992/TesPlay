@@ -61,15 +61,13 @@ export default function AuthScreen({
     >
       <header className="auth-header">
         <Brand />
-        <span>Personal media, together</span>
       </header>
       <main className="auth-main">
         <div className="auth-intro">
           <span className="eyebrow">Made for the Tesla browser</span>
-          <h1>Your collection.<br />On the big screen.</h1>
-          <p>Your films, shows and live channels, together in your Tesla. Sign in once and keep your libraries close.</p>
-          <div className="auth-library-strip" aria-label="Supported libraries"><span>Plex</span><span>IPTV</span><span>YouTube</span><span>Drive</span><span>Stremio</span></div>
-          <div className="auth-caption"><span className="auth-caption-line" /><span>Pick a story. Press play.</span></div>
+          <h1>Your own libraries<br />on the Tesla screen</h1>
+          <p>Films, shows and live channels from your own accounts, in the Tesla browser. Sign in once with your phone.</p>
+          <div className="auth-library-strip" aria-label="Supported libraries"><span>Plex</span><span>IPTV</span><span>YouTube</span><span>Drive</span><span>Stremio</span><span>MovieBox Pro</span></div>
         </div>
         <div className="auth-card">
           <span className="small-caps">Your account</span>
@@ -186,8 +184,8 @@ export default function AuthScreen({
         </div>
       </main>
       <footer className="auth-footer">
-        <span>Your libraries. Your screen.</span>
-        <span>Independent · Self-hosted</span>
+        <span>Self-hosted on your own server</span>
+        <span>Not affiliated with Tesla</span>
       </footer>
     </div>
   );

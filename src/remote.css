@@ -41,8 +41,7 @@ body:has(.cinema-remote) {
   background: #74747c;
 }
 .cinema-connection i[data-online="true"] {
-  background: #76cba2;
-  box-shadow: 0 0 0 4px #76cba210;
+  background: #4cc38a;
 }
 .cinema-controls,
 .cinema-queue {
@@ -53,24 +52,20 @@ body:has(.cinema-remote) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
-  letter-spacing: 1.8px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 500;
   color: #92929c;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 .cinema-eyeline b {
   color: #e82127;
-  letter-spacing: 1px;
 }
 .cinema-artwork {
   position: relative;
   aspect-ratio: 1.55;
   border-radius: 18px;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 20% 80%, #4b302b, transparent 70%),
-    linear-gradient(145deg, #25252d, #17171d);
+  background: #19191b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,8 +95,8 @@ body:has(.cinema-remote) {
   font-size: 21px;
   line-height: 1.3;
   margin: 0;
-  font-weight: 750;
-  letter-spacing: -0.6px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
 }
 .cinema-title p {
   font-size: 12px;
@@ -109,14 +104,11 @@ body:has(.cinema-remote) {
   margin: 7px 0 0;
 }
 .cinema-source {
-  background: #e8212712;
-  color: #ff5a5f;
-  border: 1px solid #e8212725;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  border-radius: 7px;
-  padding: 6px 8px;
+  color: #a1a1a6;
+  border: 1px solid #ffffff1f;
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 4px 8px;
   max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -174,7 +166,7 @@ body:has(.cinema-remote) {
 .cinema-transport button > span {
   position: absolute;
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .cinema-transport .cinema-play {
   background: #e82127;
@@ -182,7 +174,6 @@ body:has(.cinema-remote) {
   width: 66px;
   height: 66px;
   color: white;
-  box-shadow: 0 8px 25px #e8212725;
 }
 .cinema-play .busy {
   padding: 0;
@@ -285,14 +276,15 @@ body:has(.cinema-remote) {
   flex: 1;
 }
 .cinema-pair-icon {
-  color: #ff5a5f;
-  background: #e8212712;
-  border-radius: 18px;
+  color: #a1a1a6;
+  background: #19191b;
+  border: 1px solid #ffffff14;
+  border-radius: 16px;
   display: grid;
   place-items: center;
-  width: 76px;
-  height: 76px;
-  margin-bottom: 30px;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 32px;
 }
 .cinema-pair h1 {
   font-size: 32px;
@@ -483,7 +475,7 @@ html:has(.cinema-remote),body:has(.cinema-remote){height:100%;min-width:0;overfl
 .cinema-connection i{width:8px;height:8px}
 .cinema-status-text{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .cinema-controls{padding:12px 20px 18px;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(5px,1.3dvh,12px)}
-.cinema-eyeline{flex:none;margin:0;font-size:9px;letter-spacing:1.2px}
+.cinema-eyeline{flex:none;margin:0;font-size:12px}
 .cinema-artwork{flex:1;min-height:0;max-height:min(25dvh,200px);width:100%;aspect-ratio:auto;border-radius:14px}
 .cinema-title{flex:none;min-width:0;margin:0;gap:10px;align-items:center}
 .cinema-title>div{min-width:0;flex:1}

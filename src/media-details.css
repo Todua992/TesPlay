@@ -121,7 +121,7 @@
 .yt-details-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .yt-details-thumb-empty { display: grid; place-items: center; height: 100%; color: #fff6; }
 .yt-details-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 64px; height: 64px; padding-left: 4px; border-radius: 50%; background: #000000a6; color: #fff; transition: background .15s, transform .15s; }
-.yt-details-thumb:hover .yt-details-play, .yt-details-thumb:active .yt-details-play { background: var(--accent); transform: translate(-50%, -50%) scale(1.05); }
+.yt-details-thumb:hover .yt-details-play, .yt-details-thumb:active .yt-details-play { background: var(--accent); }
 .yt-details-duration { position: absolute; right: 8px; bottom: 8px; padding: 2px 6px; border-radius: 4px; background: #000c; color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .yt-details-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #ffffff4d; }
 .yt-details-progress i { display: block; height: 100%; background: #ff0033; }

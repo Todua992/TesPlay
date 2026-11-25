@@ -68,8 +68,8 @@ export default function IptvBundleBrowser({ connections: allConnections, library
         }}><Star size={16} fill={starred ? 'currentColor' : 'none'}/></button></div>;
       })}</div>
     </aside>
-    <div className="library-main"><div className="library-heading"><div>{onBack && <button className="text-button iptv-library-back" onClick={onBack}><ArrowLeft size={17}/>All sources</button>}<span className="eyebrow">YOUR IPTV, TOGETHER</span><h1>{kinds.find(k => k[0] === kind)?.[1] || 'IPTV'}</h1><p>Selected categories from all your IPTV connections.</p></div><RefreshButton label="Refresh IPTV library" onRefresh={() => setRefresh(value => value + 1)}/></div>
-      <div className="library-search"><div className="inline-search"><Search size={18}/><input aria-label="Search this library" value={draft} placeholder="Search IPTV…" onChange={e => setDraft(e.target.value)}/></div></div>
+    <div className="library-main"><div className="library-heading"><div>{onBack && <button className="text-button iptv-library-back" onClick={onBack}><ArrowLeft size={17}/>All sources</button>}<span className="eyebrow">YOUR IPTV, TOGETHER</span><h1>{kinds.find(k => k[0] === kind)?.[1] || 'IPTV'}</h1><p>Selected categories from all your IPTV connections</p></div><RefreshButton label="Refresh IPTV library" onRefresh={() => setRefresh(value => value + 1)}/></div>
+      <div className="library-search"><div className="inline-search"><Search size={18}/><input aria-label="Search this library" value={draft} placeholder="Search IPTV" onChange={e => setDraft(e.target.value)}/></div></div>
       {errors.map(error => <div className="form-error" role="alert" key={error}>{error}</div>)}
       {items.length > 0 && renderItems(items,open)}{busy && <Busy label="Loading your IPTV bundle…"/>}
       {!busy && !items.length && !errors.length && <Empty title="No titles in this selection" action={<button className="button ghost" onClick={onConnect}>IPTV settings<ArrowRight size={16}/></button>}>Choose categories using the filter icon next to your IPTV connection’s edit button.</Empty>}

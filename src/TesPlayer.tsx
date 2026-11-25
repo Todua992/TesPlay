@@ -284,7 +284,7 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
           <button className="icon-button" aria-label={fullscreen||immersive?'Exit fullscreen':'Fullscreen video'} aria-pressed={fullscreen||immersive} onClick={toggleFullscreen}><SutroIcon name={fullscreen||immersive?'exitFullscreen':'fullscreen'}/></button>
         </div>
       </div>
-      <div className="tesplayer-meta"><span><i /> TESPLAYER</span><span>{snapshot?.phase === 'playing' ? 'Playing' : snapshot?.phase === 'paused' ? 'Paused' : snapshot?.phase === 'ended' ? 'Finished' : snapshot?.isLive ? 'Live stream' : 'Ready to watch'}</span></div>
+      <div className="tesplayer-meta"><span><i /> TesPlayer</span><span>{snapshot?.phase === 'playing' ? 'Playing' : snapshot?.phase === 'paused' ? 'Paused' : snapshot?.phase === 'ended' ? 'Finished' : snapshot?.isLive ? 'Live stream' : 'Ready to watch'}</span></div>
     </div>}
       {!remoteOnly&&settings&&<div className="tesplayer-settings" role="dialog" aria-label="Player settings">
           <button className="player-menu-row" onClick={()=>{setSubtitleMenu(true);setSettings(false);}}><Captions size={18}/><span>Subtitles</span><em>{localCaptions?'Yours':snapshot?.subtitleTracks.find(t=>t.id===snapshot?.selectedSubtitleTrackId)?.label||'Off'}</em><ChevronRight size={16}/></button>

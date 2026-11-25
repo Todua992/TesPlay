@@ -56,8 +56,8 @@ export default function RemoteLibrary({
     <section className="remote-library" aria-label="Screen library">
       <div className="remote-library-heading">
         <div>
-          <span className="eyebrow">PLAY ON YOUR SCREEN</span>
-          <h1>Find your next watch.</h1>
+          <span className="eyebrow">Play on your screen</span>
+          <h1>Find something to watch</h1>
         </div>
         {onControls && (
           <button className="button ghost small" onClick={onControls}>

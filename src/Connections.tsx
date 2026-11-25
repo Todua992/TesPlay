@@ -191,7 +191,7 @@ export default function Connections({
           <h1>Your connections</h1>
           <p>
             Your API keys and provider accounts, saved securely with your
-            TesPlay account.
+            TesPlay account
           </p>
         </div>
         <span className="count-pill">
@@ -201,7 +201,7 @@ export default function Connections({
       </div>}
       {preview && (
         <div className="notice">
-          <span>Sign in to save connections securely on your server.</span>
+          <span>Sign in to save connections securely on your server</span>
           <button className="text-button" onClick={onSignIn}>
             Sign in <ArrowUpRight size={16} />
           </button>
@@ -234,7 +234,7 @@ export default function Connections({
           {notice}
         </div>
       )}
-      {connections.some(c => ['xtream','m3u'].includes(c.type)) && <div className="iptv-bundle-notice"><span>All IPTV connections appear together in one library.</span><button className="button ghost small" onClick={() => beginAdd('xtream')}><Plus size={16}/>Add IPTV connection</button></div>}
+      {connections.some(c => ['xtream','m3u'].includes(c.type)) && <div className="iptv-bundle-notice"><span>All IPTV connections appear together in one library</span><button className="button ghost small" onClick={() => beginAdd('xtream')}><Plus size={16}/>Add IPTV connection</button></div>}
       <SavedConnections connections={connections} busy={busy} onBrowse={onBrowse} onEdit={editConnection} onCategories={setCategoryConnection}
         onDelete={setDeleting} onPlexOptions={plexOptions} onTest={c => run(async () => {
           const result = await api<{ message: string }>(`/connections/${c.id}/test`, {});
