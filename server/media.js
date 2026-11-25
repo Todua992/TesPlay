@@ -441,6 +441,8 @@ export function createMediaService(ctx) {
       const authorized = authorizedResource(req);
       item = authorized.item;
       const connection = authorized.connection;
+      // Lets the request-failure log name the provider behind an opaque media link.
+      res.locals.provider = connection?.type;
       item.controllers ??= new Set();
       item.controllers.add(controller);
       res.once("close", () => item.controllers.delete(controller));

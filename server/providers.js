@@ -295,11 +295,14 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
     if (!c.config.token) throw providerError("Sign in to Plex first.");
     return c.config.token;
   }
-  async function plexRequest(c, pathname, token, options = {}) {
-    const absolute = /^https?:\/\//i.test(pathname);
-    if (!absolute && !c.config?.url)
+  function plexUrl(c, pathname) {
+    if (/^https?:\/\//i.test(pathname)) return new URL(pathname);
+    if (!c.config?.url)
       throw providerError("This Plex connection has no server address saved. Reconnect it from Connections.", 400);
-    const url = absolute ? new URL(pathname) : new URL(pathname, c.config.url);
+    return new URL(pathname, c.config.url);
+  }
+  async function plexRequest(c, pathname, token, options = {}) {
+    const url = plexUrl(c, pathname);
     const body = await fetchData(url, {
       text: true,
       headers: plexHeaders(c, token),
@@ -790,7 +793,7 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
           }
           ensure(req,c,{type:contentKind,sectionId});
         }
-        const u = new URL(pathname, c.config.url);
+        const u = plexUrl(c, pathname);
         u.searchParams.set(
           "X-Plex-Container-Start",
           String((p.page - 1) * p.limit),

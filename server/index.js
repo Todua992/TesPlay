@@ -309,10 +309,11 @@ export async function createApp(options = {}) {
             : error.message;
     // Provider errors can contain credentials in request URLs. Never echo stack traces or URLs.
     if (status >= 500 && !options.quiet) {
-      // Messages are curated provider text or runtime errors; the first stack
-      // frame (file:line only) locates unexpected errors without leaking URLs.
-      const frame = status === 500 ? /\((?:file:\/\/)?([^()]+:\d+):\d+\)/.exec(String(error.stack || "").split("\n")[1] || "")?.[1] : "";
-      console.error("TesPlay request failed:", status, req.method, req.path.replace(/\/[^/]{20,}/g, "/…"), error.name ?? "Error", "-", error.message || "", frame ? `@ ${frame}` : "");
+      // Messages are curated provider text or runtime errors; the first TesPlay
+      // stack frame (file:line only) locates unexpected errors without leaking URLs.
+      const frames = status === 500 ? String(error.stack || "").split("\n").slice(1).map((line) => /at (?:.*\()?(?:file:\/\/)?([^()\s]+:\d+):\d+\)?$/.exec(line.trim())?.[1]).filter(Boolean) : [];
+      const frame = frames.find((f) => !f.startsWith("node:") && !f.includes("/node_modules/")) || frames[0];
+      console.error("TesPlay request failed:", status, req.method, req.path.replace(/\/[^/]{20,}/g, "/…"), ...(res.locals.provider ? [`[${res.locals.provider}]`] : []), error.name ?? "Error", "-", error.message || "", frame ? `@ ${frame}` : "");
     }
     res.status(status).json({ error: message, ...(error.code?{code:error.code}:{}) });
   });
