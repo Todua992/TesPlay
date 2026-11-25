@@ -543,6 +543,7 @@ export function registerProviderRoutes(app, ctx, dependencies = {}) {
   if (!ctx.media) {
     app.get(["/api/media/:token", "/api/v1/media/:token"], media.handler);
     app.post('/api/media/:token/heartbeat', media.heartbeatHandler);
+    app.post('/api/media/:token/audio-compat', media.audioCompatHandler);
     app.delete(["/api/media/:token", "/api/v1/media/:token"], media.releaseHandler);
   }
   async function youtubePlayback(req, videoId, c = null) {

@@ -7,6 +7,7 @@ import { realpath, stat } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { createAudioCompat } from "./audio-compat.js";
 
 // Pool by origin AND the validated DNS address. A later DNS answer cannot
 // reuse a socket to an address that the current request did not authorize.
@@ -321,6 +322,7 @@ export const mediaTypes = {
 
 export function createMediaService(ctx) {
   const resources = new Map();
+  const audioCompat = ctx.audioCompat || createAudioCompat({ requestRemote, parseRange, providerError });
   const socketOwners = new WeakMap();
   const watchedSockets = new WeakSet();
   const unavailableArtwork = (res) => res.status(200)
@@ -449,6 +451,8 @@ export function createMediaService(ctx) {
       item.expires = Date.now() + 12 * 3600000;
       res.setHeader("Cache-Control", "private, no-store");
       res.setHeader("X-Content-Type-Options", "nosniff");
+      if (item.kind === "audio-compat")
+        return await audioCompat.serve(req, res, item, controller.signal, req.params.token);
       // Adapter inspection and decoder startup read the same playlist back to
       // back. Some live providers require the first segment to be requested
       // before accepting another playlist read. Share that initial snapshot;
@@ -689,6 +693,35 @@ export function createMediaService(ctx) {
       next(error);
     }
   }
+  // Registers a converted audio stream for a direct video file whose audio
+  // codec the browser cannot decode. The player keeps reading video from the
+  // original ticket and reads audio from the returned one.
+  async function audioCompatHandler(req, res, next) {
+    try {
+      const {item, connection} = authorizedResource(req);
+      if (!item.url || item.root || item.hlsText || item.hlsChild || ["artwork", "subtitle", "hls", "audio-compat"].includes(item.kind))
+        throw providerError("Only direct video files can use audio conversion.", 400);
+      const source = {
+        url: item.url,
+        allowedPrivateHosts: item.allowedPrivateHosts,
+        headers: async () => (item.getHeaders ? await item.getHeaders(req, connection) : item.headers) || {},
+      };
+      const audio = await audioCompat.probe(source, req.body?.trackNumber);
+      const url = register(req, connection, {
+        kind: "audio-compat",
+        source,
+        ...audio,
+        access: item.access,
+        remoteRoomId: item.remoteRoomId,
+        remoteHostSessionId: item.remoteHostSessionId,
+        remoteMediaId: item.remoteMediaId,
+      });
+      // Releasing the video ticket also stops its conversion.
+      item.children ??= new Map();
+      item.children.set(url, url);
+      res.json({ url, codec: audio.codec });
+    } catch (error) { next(error); }
+  }
   function releaseHandler(req, res, next) {
     try {
       const item = resources.get(req.params.token);
@@ -714,5 +747,5 @@ export function createMediaService(ctx) {
       res.json({ released: true });
     } catch (error) { next(error); }
   }
-  return { register, handler, heartbeatHandler, releaseHandler };
+  return { register, handler, heartbeatHandler, audioCompatHandler, releaseHandler };
 }

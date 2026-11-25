@@ -197,6 +197,7 @@ export async function createApp(options = {}) {
   });
   app.get(["/api/media/:token", "/api/v1/media/:token"], ctx.media.handler);
   app.post('/api/media/:token/heartbeat', ctx.media.heartbeatHandler);
+  app.post('/api/media/:token/audio-compat', ctx.media.audioCompatHandler);
   app.delete(["/api/media/:token", "/api/v1/media/:token"], ctx.media.releaseHandler);
   // Registrars share the gates above; keep authentication and remote scope
   // checks ahead of every account, profile, library and connection route.

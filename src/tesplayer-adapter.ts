@@ -172,6 +172,22 @@ export async function createTesPlayAdapter(playback: Playback, item: MediaItem, 
     },
     requestCompatibility: async (sessionId, mode, _reason, operationSignal, _seek, generation) => {
       checkGeneration(sessionId, generation);
+      // Other direct files with audio this browser cannot decode (e.g. AC-3/E-AC-3):
+      // the server converts just the audio, and video still comes from the original file.
+      const source = readableUrl(root.url);
+      const ticket = source.origin === location.origin ? /^\/api\/(?:v1\/)?media\/([A-Za-z0-9_-]+)$/.exec(source.pathname)?.[1] : undefined;
+      if (mode === 'audio-only' && root.provider !== 'plex' && root.type === 'video' && (root.streamKind || 'direct-file') === 'direct-file' && !root.audioUrl && !root.isLive && ticket) {
+        const trackNumber = Number(/^file-audio-(\d+)$/.exec(current.selectedAudioTrackId || '')?.[1]) || undefined;
+        const converted = await api<{ url: string }>(`/media/${ticket}/audio-compat`, { trackNumber }, 'POST', operationSignal);
+        const replacement: Playback = { ...root, audioUrl: converted.url, streamKind: 'dual-input' };
+        fileTracks = undefined; representationId = undefined;
+        const session = await prepare(replacement, 'auto', operationSignal);
+        operationSignal.throwIfAborted();
+        checkGeneration(sessionId, generation);
+        root = replacement;
+        current = session;
+        return session;
+      }
       if (!item.connectionId || root.provider !== 'plex' || compatible || mode === 'subtitle-extract') throw new Error('This source needs a supported codec. Plex titles can use Plex compatibility mode.');
       const replacement = await api<Playback>(playbackPath(item,{...root.settings,audioTrackId:selectedAudio?.startsWith('plex-audio-')?selectedAudio:root.settings?.audioTrackId,compatibility:true}), undefined, undefined, operationSignal);
       replacement.settings={...root.settings,compatibility:true};
