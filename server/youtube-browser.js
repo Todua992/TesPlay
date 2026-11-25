@@ -48,6 +48,10 @@ export function registerYouTubeBrowser(app, { connection, request, route, art, c
       id: x.snippet.resourceId.channelId, title: text(x.snippet.title), description: text(x.snippet.description), thumbnail: art(req, c, x.snippet.thumbnails?.medium?.url || x.snippet.thumbnails?.default?.url), videoCount: x.contentDetails?.totalItemCount || 0,
     })), nextPageToken: data.nextPageToken || null, total: Number(data.pageInfo?.totalResults) || 0 };
   };
+  // Charts are public, so "You may like" also works with an API key alone.
+  const chart = (req, c, region, categoryId) => cached(cacheKey(c) + `:popular:${region}:${categoryId || 'all'}`, () => request(req, c, 'videos', {
+    part: 'snippet,contentDetails', chart: 'mostPopular', regionCode: region, maxResults: '24', ...(categoryId ? { videoCategoryId: categoryId } : {}),
+  }), 1800);
   const root = '/api/youtube/:connectionId';
   app.get(root + '/subscriptions', route(async (req, res) => {
     const c = connection(req, req.params.connectionId, 'youtube');
@@ -79,6 +83,32 @@ export function registerYouTubeBrowser(app, { connection, request, route, art, c
       req.query.pageToken ? Promise.resolve({items:[]}) : cached(cacheKey(c)+':search-channels:'+q,()=>request(req,c,'search',{part:'snippet',type:'channel',maxResults:'12',q}),120),
     ]);
     res.json({items:await withDurations(req,c,rows(data.items).map(x=>video(req,c,x)).filter(Boolean)),channels:rows(matches.items).filter(x=>/^UC[A-Za-z0-9_-]{22}$/.test(String(x.id?.channelId))).map(x=>({id:x.id.channelId,title:text(x.snippet?.title),thumbnail:art(req,c,x.snippet?.thumbnails?.medium?.url || x.snippet?.thumbnails?.default?.url)})),nextPageToken:data.nextPageToken||null});
+  }));
+  // "You may like": YouTube's API offers no personal recommendations, so mix the
+  // most popular videos in the region with the most popular in the categories
+  // this profile watches most, leaving out videos it has already watched.
+  app.get(root + '/popular', route(async (req, res) => {
+    const c = connection(req, req.params.connectionId, 'youtube');
+    const region = /^[A-Z]{2}$/.test(process.env.YOUTUBE_REGION || '') ? process.env.YOUTUBE_REGION : 'DK';
+    const history = library(req).progress.filter(x => x.item.connectionId === c.id);
+    const watched = new Set(history.map(x => x.item.id));
+    const recent = [...watched].filter(id => /^[A-Za-z0-9_-]{11}$/.test(id)).slice(0, 50);
+    const counts = new Map();
+    if (recent.length) {
+      const data = await cached(cacheKey(c) + ':categories:' + [...recent].sort().join(','), () => request(req, c, 'videos', { part: 'snippet', id: recent.join(',') }), 3600).catch(() => ({ items: [] }));
+      for (const x of rows(data.items)) if (/^\d+$/.test(x.snippet?.categoryId || '')) counts.set(x.snippet.categoryId, (counts.get(x.snippet.categoryId) || 0) + 1);
+    }
+    const categories = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
+    // Some categories have no chart in a region; the others still fill the list.
+    const results = await Promise.allSettled([...categories.map(id => chart(req, c, region, id)), chart(req, c, region)]);
+    if (results.every(r => r.status === 'rejected')) throw results.at(-1).reason;
+    // Interleave the lists so every category and the regional chart appear near the top.
+    const lists = results.map(r => r.status === 'fulfilled' ? rows(r.value.items) : []), mixed = new Map();
+    for (let index = 0; index < 24; index++) for (const list of lists) {
+      const x = list[index], item = x && video(req, c, x);
+      if (item && !watched.has(item.id) && !mixed.has(item.id)) mixed.set(item.id, { ...item, ...(youtubeDuration(x.contentDetails?.duration) ? { duration: youtubeDuration(x.contentDetails.duration) } : {}) });
+    }
+    res.json({ items: [...mixed.values()].slice(0, 36), region, categories, basis: 'popular' });
   }));
   app.get(root + '/feed', route(async (req, res) => {
     const c = connection(req, req.params.connectionId, 'youtube'); personal(c);

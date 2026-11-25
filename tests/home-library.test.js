@@ -43,16 +43,21 @@ test('IPTV home requests only starred live categories alongside recent movie and
   const empty=await loadHomeConnection(connection('m3u'),()=>{throw Error('No unstarred channels should be requested');},new AbortController().signal);
   assert.deepEqual(empty.shelves,[]);assert.deepEqual(empty.issues,[]);
 });
-test('YouTube home uses subscriptions instead of a public demo search and reports missing authorization', async () => {
-  let path = '';
+test('YouTube home shows You may like before subscriptions and reports missing authorization', async () => {
+  const paths = [];
   const c = { ...connection('youtube'), authMode: 'oauth', oauthAuthorized: true };
-  const result = await loadHomeConnection(c, async p => { path = p; return { items: [item('Subscribed upload', 'video', 'youtube')], partial: true }; }, new AbortController().signal);
-  assert.equal(path, '/youtube/youtube/feed');
-  assert.equal(result.shelves[0].items[0].title, 'Subscribed upload');
+  const result = await loadHomeConnection(c, async p => { paths.push(p); return p.endsWith('/popular') ? { items: [item('Popular in Denmark', 'video', 'youtube')] } : { items: [item('Subscribed upload', 'video', 'youtube')], partial: true }; }, new AbortController().signal);
+  assert.deepEqual(paths, ['/youtube/youtube/popular', '/youtube/youtube/feed']);
+  assert.deepEqual(result.shelves.map(s => [s.title, s.items[0].title]), [['YouTube · You may like', 'Popular in Denmark'], ['YouTube · Starred channels', 'Subscribed upload']]);
   assert.equal(result.issues.length, 1);
-  const denied = await loadHomeConnection({ ...c, authMode: 'apiKey' }, () => { throw Error('Must not request public demo search'); }, new AbortController().signal);
-  assert.equal(denied.shelves.length, 0);
-  assert.match(denied.issues[0], /Connect Google/);
+  const publicPaths = [];
+  const publicOnly = await loadHomeConnection({ ...c, authMode: 'apiKey' }, async p => { publicPaths.push(p); return { items: [item('Popular in Denmark', 'video', 'youtube')] }; }, new AbortController().signal);
+  assert.deepEqual(publicPaths, ['/youtube/youtube/popular'], 'Subscriptions need Google');
+  assert.deepEqual(publicOnly.shelves.map(s => s.title), ['YouTube · You may like']);
+  assert.match(publicOnly.issues[0], /Connect Google/);
+  const failed = await loadHomeConnection(c, async p => { if (p.endsWith('/popular')) throw Error('quota'); return { items: [item('Subscribed upload', 'video', 'youtube')] }; }, new AbortController().signal);
+  assert.deepEqual(failed.shelves.map(s => s.title), ['YouTube · Starred channels'], 'Subscriptions still load');
+  assert.deepEqual(failed.issues, ['You may like: quota']);
 });
 test('Drive and local home previews bound folder expansion and preserve direct files', async () => {
   for (const type of ['drive', 'local']) {
@@ -83,7 +88,7 @@ test('aborted home requests reject instead of publishing rows for the previous p
 test('YouTube home keeps each starred channel rail in newest-first upload order',async()=>{
   const c={...connection('youtube'),authMode:'oauth',oauthAuthorized:true};
   const newest=item('Newest','video','youtube'),older=item('Older','video','youtube');
-  const result=await loadHomeConnection(c,async()=>({items:[newest,older],channelRows:[{id:'UCfavorite',title:'Favorite channel',items:[newest,older]}]}),new AbortController().signal);
+  const result=await loadHomeConnection(c,async path=>path.endsWith('/popular')?{items:[]}:{items:[newest,older],channelRows:[{id:'UCfavorite',title:'Favorite channel',items:[newest,older]}]},new AbortController().signal);
   assert.equal(result.shelves[0].title,'YouTube · Favorite channel');assert.equal(result.shelves[0].channel.id,'UCfavorite');assert.deepEqual(result.shelves[0].items.map(i=>i.id),['Newest','Older']);
 });
 const browserSource=ts.transpileModule(fs.readFileSync(new URL('../src/library-browser.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
@@ -113,6 +118,7 @@ test('unified Movies and Series expand Plex sections instead of treating Plex as
 test('Home includes starred channels beyond the first feed page without repeating offsets',async()=>{
   const offsets=[];
   const result=await loadHomeConnection({...connection('youtube'),authMode:'oauth',oauthAuthorized:true},async path=>{
+    if(path.endsWith('/popular'))return{items:[]};
     const offset=new URL(path,'https://example.test').searchParams.get('offset');offsets.push(offset);
     return{items:[],channelRows:[{id:offset||'first',title:offset||'First channel',items:[item('upload '+(offset||'first'),'video','youtube')]}],nextOffset:offset?null:8};
   },new AbortController().signal);

@@ -35,7 +35,9 @@ export async function loadHomeConnection(c: Connection, request: Request, signal
       collect(await Promise.allSettled(catalogs.map(entry => catalog(entry.type, '', entry.id))), catalogs.map(entry=>entry.name),
         (result,index)=>shelf(catalogs[index].id,catalogs[index].name,result.items,{kind:catalogs[index].type,category:catalogs[index].id}));
     } else if (c.type === 'youtube') {
-      if (c.authMode !== 'oauth' || !c.oauthAuthorized) return { shelves, issues: ['Connect Google in YouTube settings to load your subscription videos.'] };
+      // Popular videos need no Google account; starred channels do.
+      collect(await Promise.allSettled([request(`/youtube/${encodeURIComponent(c.id)}/popular`, signal)]), ['You may like'], r => { if (r.items.length) shelf('you-may-like', 'YouTube · You may like', r.items); });
+      if (c.authMode !== 'oauth' || !c.oauthAuthorized) return { shelves, issues: [...issues, 'Connect Google in YouTube settings to load your subscription videos.'] };
       const offsets=new Set<number>(); let offset: number | undefined;
       do {
         const data = await request(`/youtube/${encodeURIComponent(c.id)}/feed${offset===undefined?'':`?offset=${offset}`}`, signal);

@@ -2777,6 +2777,8 @@ form {
 .yt-section-title h2 { margin:0; font-size:19px; }
 .yt-hub .youtube-video-grid { grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:22px 16px; }
 .yt-queue { margin-bottom:24px; }
+.yt-more-hint { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin:22px 0 0; }
+.yt-more-hint .text-button { display:inline-flex; align-items:center; gap:6px; }
 
 @media (max-width:700px) {
   .yt-top { flex-wrap:wrap; gap:10px; }
@@ -2911,6 +2913,7 @@ input, select { min-height: 40px; padding: 9px 12px; border-radius: 8px; backgro
 .yt-hub .youtube-tabs button.selected { background: var(--text); border-color: var(--text); color: var(--bg); }
 .yt-hub .yt-section-title { margin: 4px 0 10px; }
 .yt-hub .yt-section-title h2 { font-size: 15px; color: var(--muted); font-weight: 500; }
+.yt-hub .yt-section-title.yt-section-follows { margin-top: 34px; }
 .yt-hub .media-rail .format-thumbnail { flex-basis: 248px; }
 .yt-hub .youtube-video-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px 12px; }
 .yt-chip-main img, .yt-chip-fallback { width: 56px; height: 56px; }
