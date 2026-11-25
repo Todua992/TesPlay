@@ -2828,6 +2828,8 @@ input, select { min-height: 40px; padding: 9px 12px; border-radius: 8px; backgro
 /* Section rows */
 .section-heading { margin-bottom: 10px; gap: 12px; }
 .section-heading h2, .library-main .section-heading h2, .search-section-title { font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
+.media-section-emphasis .section-heading h2 { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+@media (max-width: 700px) { .media-section-emphasis .section-heading h2 { font-size: 20px; } }
 .section-heading p { font-size: 12px; }
 .row, .media-row { margin-bottom: 18px; }
 .media-rail { gap: 12px; padding: 2px 0 10px; }

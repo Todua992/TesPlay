@@ -241,6 +241,7 @@ export function Row({
   more,
   progress,
   presentation,
+  emphasis,
 }: {
   title: string;
   subtitle?: string;
@@ -251,10 +252,12 @@ export function Row({
   more?: () => void;
   progress?: (i: MediaItem) => number | undefined;
   presentation?: "continue";
+  /** A bold, larger title for rows that should stand out. */
+  emphasis?: boolean;
 }) {
   const rail = useRef<HTMLDivElement>(null);
   return (
-    <section className="media-section">
+    <section className={`media-section${emphasis ? " media-section-emphasis" : ""}`}>
       <div className="section-heading">
         <div>
           <h2>{more ? <button className="row-title" onClick={more}>{title}<ChevronRight size={18}/></button> : title}</h2>

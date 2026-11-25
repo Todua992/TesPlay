@@ -187,7 +187,7 @@ export default function YouTubeHub({connections,library:rawLibrary,hideYouTubeSh
 
       {selection&&<div className="yt-section-title"><h2>{selection.title}</h2>{searching&&<button className="text-button" onClick={()=>{setSelection(null);setCursor(null);}}><X size={15}/>All results</button>}</div>}
       {continuing.length>0&&<Row presentation="continue" title="Continue watching" items={continuing} {...rowProps}/>}
-      {popularRows.map(row=><Row key={row.id} title={row.title} items={row.items} {...rowProps}/>)}
+      {popularRows.map(row=><Row key={row.id} emphasis title={row.title} items={row.items} {...rowProps}/>)}
       {forYou&&visibleRows.length>0&&<div className={`yt-section-title ${continuing.length||popularRows.length?'yt-section-follows':''}`}><h2>Fresh from your starred channels</h2><RefreshButton label="Refresh YouTube" disabled={busy||popularBusy} onRefresh={()=>{setCursor(null);setRefresh(n=>n+1);}}/></div>}
       {searching&&!selection&&collections.length>0&&visible.length>0&&<div className="yt-section-title"><h2>Videos</h2></div>}
 

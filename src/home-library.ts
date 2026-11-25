@@ -1,7 +1,7 @@
 import type { Connection, MediaItem, Starred } from './types';
 // `featured` marks the shelf the Home carousel shows; `personal` a provider row
 // built from the account's own history, which never fills the carousel.
-export type HomeShelf = { id: string; title: string; connectionId: string; items: MediaItem[]; parent?: MediaItem; kind?: string; category?:string; channel?: {id:string;title:string}; featured?: boolean; personal?: boolean };
+export type HomeShelf = { id: string; title: string; connectionId: string; items: MediaItem[]; parent?: MediaItem; kind?: string; category?:string; channel?: {id:string;title:string}; featured?: boolean; personal?: boolean; emphasis?: boolean };
 const PERSONAL_ROW = /continue|watching|history|recent|my list|watch ?later|watchlist|favou?rite/i;
 /** MovieBox Pro's "Today's Hot Movies" row, or the closest hot/trending movie row. */
 export function hotMoviesRow<T extends { title: string }>(rows: T[]): T | undefined {
@@ -45,7 +45,7 @@ export async function loadHomeConnection(c: Connection, request: Request, signal
         (result,index)=>shelf(catalogs[index].id,catalogs[index].name,result.items,{kind:catalogs[index].type,category:catalogs[index].id}));
     } else if (c.type === 'youtube') {
       // Popular videos need no Google account; starred channels do.
-      collect(await Promise.allSettled([request(`/youtube/${encodeURIComponent(c.id)}/popular`, signal)]), ['Popular videos'], r => { for (const row of r.rows || []) shelf(`popular:${row.id}`, `YouTube · ${row.title}`, row.items); });
+      collect(await Promise.allSettled([request(`/youtube/${encodeURIComponent(c.id)}/popular`, signal)]), ['Popular videos'], r => { for (const row of r.rows || []) shelf(`popular:${row.id}`, `YouTube · ${row.title}`, row.items, { emphasis: true }); });
       if (c.authMode !== 'oauth' || !c.oauthAuthorized) return { shelves, issues: [...issues, 'Connect Google in YouTube settings to load your subscription videos.'] };
       const offsets=new Set<number>(); let offset: number | undefined;
       do {
