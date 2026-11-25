@@ -51,7 +51,9 @@ export default function Player({
     [ended, setEnded] = useState(false),
     [countdown, setCountdown] = useState<number | null>(null),
     [autoplayCancelled, setAutoplayCancelled] = useState(false),
-    [compatible, setCompatible] = useState(!!settings.compatibility), [resolveAttempt,setResolveAttempt]=useState(0);
+    [compatible, setCompatible] = useState(!!settings.compatibility), [resolveAttempt,setResolveAttempt]=useState(0),
+    // Automatic retries since the stream last played; TesPlayer gives up after two.
+    [autoRetries, setAutoRetries] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null),
     nextCallback = useRef(onNext),
     progressCallback = useRef(onProgress),
@@ -98,7 +100,7 @@ export default function Player({
     const d = dialog.current!;
     return retainPlayerDialog(d);
   }, []);
-  useEffect(()=>{resumeRef.current=settings.startOver?0:resume;resumeLoaded.current=false;setCompatible(!!settings.compatibility);},[item.id,item.connectionId,item.type,settings.compatibility,settings.startOver]);
+  useEffect(()=>{resumeRef.current=settings.startOver?0:resume;resumeLoaded.current=false;setCompatible(!!settings.compatibility);setAutoRetries(0);},[item.id,item.connectionId,item.type,settings.compatibility,settings.startOver]);
   useEffect(() => {
     const controller = new AbortController();
     let dead = false;
@@ -169,13 +171,14 @@ export default function Player({
               plexCompatibility={compatible}
               canTranscode={canTranscode}
               onCompatibilityChange={setCompatible}
-              onRetry={()=>setResolveAttempt(n=>n+1)}
+              onRetry={automatic=>{setAutoRetries(n=>automatic?n+1:0);setResolveAttempt(n=>n+1);}}
+              autoRetries={autoRetries}
               previous={previous} next={next} onNavigate={onNext}
               onProgress={(seconds, duration, state) => {
                 resumeRef.current=seconds;
                 progressCallback.current?.(item, Math.min(seconds, 604800), Math.min(duration, 604800),state);
               }}
-              onPlaying={() => { setEnded(false); }}
+              onPlaying={() => { setEnded(false); setAutoRetries(0); }}
               onEnded={() => setEnded(true)}
               onError={message=>{
                 setError(message);
@@ -189,7 +192,7 @@ export default function Player({
         {!remoteOnly&&item.type==='episode'&&<div className="player-episode-picker">{episodesLoading?<p role="status">Loading seasons and episodes…</p>:episodesError?<p className="form-error" role="alert">{episodesError}</p>:episodes.length>0&&onNext?<EpisodeSelector compact items={episodes} current={item} onSelect={onNext}/>:null}</div>}
         {error && (
           <div className="player-error" role="alert">
-            <span>{error}{remoteOnly?" Choose another title on your phone.":""}</span>{!remoteOnly&&!playback&&<button className="button ghost small" onClick={()=>setResolveAttempt(n=>n+1)}>Try again</button>}
+            <span>{error}{remoteOnly?" Choose another title on your phone.":""}</span>{!remoteOnly&&!playback&&<button className="button ghost small" onClick={()=>{setAutoRetries(0);setResolveAttempt(n=>n+1);}}>Try again</button>}
           </div>
         )}
         {!remoteOnly && <footer className={`player-footer ${ended && next ? "has-next" : ""}`}>

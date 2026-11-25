@@ -92,3 +92,25 @@ test('a real player error removes the failed video and displays its message', as
   assert.equal(f.player(), null);
   assert.ok(f.alert());
 });
+
+test('automatic retries are counted across the remount and reset by playback or a manual retry', async () => {
+  const f = await mount();
+  const retry = async automatic => {
+    f.player().props.onRetry(automatic);
+    f.render();
+    await new Promise(resolve => setImmediate(resolve));
+    f.render();
+    assert.ok(f.player(), 'The retried title resolves and mounts a fresh player');
+  };
+  assert.equal(f.player().props.autoRetries, 0);
+  await retry(true);
+  assert.equal(f.player().props.autoRetries, 1);
+  await retry(true);
+  assert.equal(f.player().props.autoRetries, 2, 'The fresh player knows its retry budget is spent');
+  await retry(false);
+  assert.equal(f.player().props.autoRetries, 0, 'A manual retry starts a new budget');
+  await retry(true);
+  f.player().props.onPlaying();
+  f.render();
+  assert.equal(f.player().props.autoRetries, 0, 'Playing again restores the budget');
+});

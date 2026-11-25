@@ -19,8 +19,10 @@ const time = (seconds: number) => {
   return whole >= 3600 ? `${Math.floor(whole / 3600)}:${String(Math.floor(whole / 60) % 60).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}` : `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 };
 const INITIAL_MESSAGE = 'Press play to begin';
-export default function TesPlayer({ playback, item, resume, plexCompatibility, canTranscode, onCompatibilityChange, onRetry, getAudioContext, autoStart, onProgress, onEnded, onPlaying, onError, onRemoteState, previous, next, onNavigate, remoteOnly = false }: {
-  playback: Playback; item: MediaItem; resume: number; plexCompatibility: boolean; canTranscode: boolean; onCompatibilityChange:(value:boolean)=>void; onRetry:()=>void;
+export default function TesPlayer({ playback, item, resume, plexCompatibility, canTranscode, onCompatibilityChange, onRetry, autoRetries = 0, getAudioContext, autoStart, onProgress, onEnded, onPlaying, onError, onRemoteState, previous, next, onNavigate, remoteOnly = false }: {
+  playback: Playback; item: MediaItem; resume: number; plexCompatibility: boolean; canTranscode: boolean; onCompatibilityChange:(value:boolean)=>void;
+  // Each retry re-resolves the title and remounts this player, so the parent owns the count of automatic retries.
+  onRetry:(automatic:boolean)=>void; autoRetries?: number;
   getAudioContext: () => AudioContext | undefined; autoStart: boolean;
   onRemoteState?: (state:RemotePlayback)=>void;
   remoteOnly?: boolean;
@@ -33,8 +35,8 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
   const [message, setMessage] = useState(INITIAL_MESSAGE);
   const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
-  const retries=useRef(0), retryPending=useRef(false), retryTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined), lastPosition=useRef(resume),lastDuration=useRef(0);
-  const freshRetry=useRef(onRetry);freshRetry.current=onRetry;
+  const retries=useRef(autoRetries), retryPending=useRef(false), retryTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined), lastPosition=useRef(resume),lastDuration=useRef(0);
+  const freshRetry=useRef(onRetry);freshRetry.current=onRetry;retries.current=autoRetries;
   const [subtitleMenu,setSubtitleMenu]=useState(false),[audioMenu,setAudioMenu]=useState(false);
   const subtitlePreferences=useRef<PlayerPreferences>(defaultPlayerPreferences);
   useEffect(()=>()=>clearTimeout(retryTimer.current),[]);
@@ -96,9 +98,9 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
     // Engine errors are already sanitized. Avoid showing raw fetch URLs or credentials.
     const text = reason instanceof TesPlaySourceError ? reason.message : unavailable ? 'This browser does not support TesPlayer canvas playback. Use an updated browser with WebCodecs enabled.' : typed?.code ? `Playback could not continue (${typed.code}). ${playback.provider === 'plex' ? 'Try again or choose Plex compatibility for this title.' : 'Reopen this title or try another stream.'}` : 'This source could not play. Check its connection and browser codec support, then try again.';
     if(['DEMUX_FAILED','NETWORK_TIMEOUT','RECOVERY_EXHAUSTED','DECODE_FAILED'].includes(typed?.code||'') && retries.current<2){
-      if(retryPending.current)return;retryPending.current=true;retries.current++;
+      if(retryPending.current)return;retryPending.current=true;
       progress.current(lastPosition.current,lastDuration.current);setBusy(true);setMessage('Reconnecting to your stream');
-      retryTimer.current=setTimeout(()=>freshRetry.current(),750);return;
+      retryTimer.current=setTimeout(()=>freshRetry.current(true),750);return;
     }
     setMessage(text); setFailed(true); setBusy(false); reportError.current(text);
   };
@@ -251,7 +253,7 @@ export default function TesPlayer({ playback, item, resume, plexCompatibility, c
         {busy?<LoaderCircle className="spin" size={32}/>:audioUnlockRequired?<button className="button primary" onClick={()=>void toggle()}>Enable sound</button>:null}
         <span role="status">{busy?message:audioUnlockRequired?'Tap once to enable picture and sound. Then use your phone.':failed?'Choose another title on your phone.':'Paused · Use your phone to resume.'}</span>
       </div>) : (busy || snapshot?.phase !== 'playing' || showControls) && <div className="tesplayer-overlay">
-        {busy ? <LoaderCircle className="spin" size={32} /> : failed ? <button className="button primary" onClick={() => { reportError.current('');retries.current=0;freshRetry.current(); }}>Try again</button> : audioUnlockRequired ? <button className="button primary" onClick={() => {reveal();void toggle();}}>Enable playback on this screen</button> : <div className="tesplayer-center-controls">{!isLive&&end>start&&<button className="tesplayer-skip" aria-label="Back 10 seconds" onClick={()=>skip('left')}><RotateCcw/><span>10</span></button>}<button className="tesplayer-big-play" onClick={() => {reveal();void toggle();}} aria-label={snapshot?.phase === 'playing' ? 'Pause video' : snapshot?.phase === 'ended' ? 'Play again' : 'Play video'}><SutroIcon name={snapshot?.phase==='playing'?'pause':'play'}/></button>{!isLive&&end>start&&<button className="tesplayer-skip" aria-label="Forward 10 seconds" onClick={()=>skip('right')}><RotateCw/><span>10</span></button>}</div>}
+        {busy ? <LoaderCircle className="spin" size={32} /> : failed ? <button className="button primary" onClick={() => { reportError.current('');freshRetry.current(false); }}>Try again</button> : audioUnlockRequired ? <button className="button primary" onClick={() => {reveal();void toggle();}}>Enable playback on this screen</button> : <div className="tesplayer-center-controls">{!isLive&&end>start&&<button className="tesplayer-skip" aria-label="Back 10 seconds" onClick={()=>skip('left')}><RotateCcw/><span>10</span></button>}<button className="tesplayer-big-play" onClick={() => {reveal();void toggle();}} aria-label={snapshot?.phase === 'playing' ? 'Pause video' : snapshot?.phase === 'ended' ? 'Play again' : 'Play video'}><SutroIcon name={snapshot?.phase==='playing'?'pause':'play'}/></button>{!isLive&&end>start&&<button className="tesplayer-skip" aria-label="Forward 10 seconds" onClick={()=>skip('right')}><RotateCw/><span>10</span></button>}</div>}
         {(snapshot?.phase!=='playing' || audioUnlockRequired)&&<span role="status">{audioUnlockRequired ? 'Your phone is ready. Tap once here to start picture and sound.' : message}</span>}
       </div>}
       {captions.length > 0 && <div className="tesplayer-captions" aria-live="off">{captions.map((cue, index) => <span key={`${cue.id}-${index}`}>{cue.text}</span>)}</div>}
