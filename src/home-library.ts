@@ -1,5 +1,14 @@
 import type { Connection, MediaItem, Starred } from './types';
-export type HomeShelf = { id: string; title: string; connectionId: string; items: MediaItem[]; parent?: MediaItem; kind?: string; category?:string; channel?: {id:string;title:string} };
+// `featured` marks the shelf the Home carousel shows; `personal` a provider row
+// built from the account's own history, which never fills the carousel.
+export type HomeShelf = { id: string; title: string; connectionId: string; items: MediaItem[]; parent?: MediaItem; kind?: string; category?:string; channel?: {id:string;title:string}; featured?: boolean; personal?: boolean };
+const PERSONAL_ROW = /continue|watching|history|recent|my list|watch ?later|watchlist|favou?rite/i;
+/** MovieBox Pro's "Today's Hot Movies" row, or the closest hot/trending movie row. */
+export function hotMoviesRow<T extends { title: string }>(rows: T[]): T | undefined {
+  const score = (title: string) => PERSONAL_ROW.test(title) ? 0 : (/today/i.test(title) ? 3 : 0) + (/\bhot\b/i.test(title) ? 4 : 0) + (/trending|popular/i.test(title) ? 2 : 0)
+    + (/movie|film/i.test(title) ? 2 : 0) - (/\b(tv|shows?|series|anime)\b/i.test(title) ? 3 : 0);
+  return rows.map(row => ({ row, value: score(row.title) })).filter(r => r.value >= 4).sort((a, b) => b.value - a.value)[0]?.row;
+}
 /** Keep recent IPTV previews together while preserving each item's provider. */
 export function bundleIptvHomeShelves(shelves:HomeShelf[], connections:Connection[]):HomeShelf[] {
   const result:HomeShelf[] = [];
@@ -66,7 +75,9 @@ export async function loadHomeConnection(c: Connection, request: Request, signal
     } else if (c.type === 'moviebox') {
       const data = await request(`/moviebox/${encodeURIComponent(c.id)}/discover`, signal) as HomeCatalog & { shelves?: { id: string; title: string; items: MediaItem[]; tab?: string }[] };
       signal.throwIfAborted();
-      for (const row of (data.shelves || []).slice(0, 4)) shelf(row.id, row.title, row.items, { category: row.tab || row.id });
+      const rows = data.shelves || [], hot = hotMoviesRow(rows);
+      for (const row of [...new Set([...rows.slice(0, 4), ...(hot ? [hot] : [])])])
+        shelf(row.id, row.title, row.items, { category: row.tab || row.id, ...(row === hot ? { featured: true } : {}), ...(PERSONAL_ROW.test(row.title) ? { personal: true } : {}) });
     } else if (c.type === 'm3u') {
       const categories=stars.filter(s=>s.connectionId===c.id && s.kind==='category' && (!Array.isArray(c.loadedCategories)||c.loadedCategories.includes(s.id)));
       collect(await Promise.allSettled(categories.map(s=>catalog('live','',s.id))),categories.map(s=>s.title),(r,index)=>shelf(categories[index].id,`${c.name} · Live TV · ${categories[index].title}`,r.items,{kind:'live',category:categories[index].id}));
@@ -79,13 +90,20 @@ export async function loadHomeConnection(c: Connection, request: Request, signal
   }
 }
 
-/** Alternate providers so the featured area is not dominated by one library. */
-export function homeFeatures(shelves: HomeShelf[]): MediaItem[] {
+/**
+ * Titles for the Home carousel, leaving out anything already watched or in
+ * progress. A featured shelf such as "Today's Hot Movies" fills it on its own;
+ * otherwise providers alternate so one library does not dominate.
+ */
+export function homeFeatures(shelves: HomeShelf[], watched: (item: MediaItem) => boolean = () => false): MediaItem[] {
+  const fresh = (item: MediaItem) => !watched(item) && !['folder','series','audio','live'].includes(item.type);
+  const spotlight = shelves.filter(shelf => shelf.featured).flatMap(shelf => shelf.items.filter(fresh));
+  if (spotlight.length) return [...new Map(spotlight.map(item => [JSON.stringify([item.connectionId, item.type, item.id]), item])).values()].slice(0, 10);
   const providers = new Map<string, MediaItem[]>();
   const seen = new Set<string>();
   const date=(item:MediaItem)=>Date.parse(item.publishedAt || item.addedAt || '') || 0;
-  for (const shelf of shelves) for (const item of shelf.items) {
-    if (['folder','series','audio','live'].includes(item.type)) continue;
+  for (const shelf of shelves) if (!shelf.personal) for (const item of shelf.items) {
+    if (!fresh({ ...item, connectionId: item.connectionId || shelf.connectionId })) continue;
     const connectionId=item.connectionId || shelf.connectionId;
     const key=JSON.stringify([connectionId,item.type,item.id]);
     if(seen.has(key))continue;
@@ -111,7 +129,7 @@ export function mergeHomeResult(previous:HomeResult|undefined,next:HomeResult):H
 }
 
 // Bump when a provider's Home shelves change, so a saved preview cannot hide new rows.
-const HOME_PREVIEW='tesplay:home:v2:';
+const HOME_PREVIEW='tesplay:home:v3:';
 // A reload reuses the browser's last successful Home preview. Provider catalogs
 // are cached on the server as well; this snapshot avoids a loading interstitial.
 export function readHomePreview(identity:string, c:Connection, stars:Starred[], storage:Pick<Storage,'getItem'>):HomeResult|undefined {

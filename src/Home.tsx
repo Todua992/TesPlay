@@ -1,12 +1,13 @@
 import './home.css';
 import { RefreshButton } from "./components";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Info, Check, Plus, ArrowUpRight, Cable } from 'lucide-react';
+import { Check, Plus, ArrowUpRight, Cable } from 'lucide-react';
 import { api } from './api';
 import { Busy, Card, Empty, Row, YouTubeLogo } from './components';
 import { services } from './catalog';
 import { itemKey } from './types';
 import type { Connection, Library, MediaItem } from './types';
+import HeroCarousel from './HeroCarousel';
 import { bundleIptvHomeShelves, homeFeatures, loadHomeConnection, mergeHomeResult, readHomePreview, writeHomePreview } from './home-library';
 import type { HomeCatalog, HomeResult, HomeShelf } from './home-library';
 import { filterLibraryForYouTubeVisibility, filterYouTubeShelves } from './youtube-visibility';
@@ -18,7 +19,7 @@ export default function Home({ cacheIdentity, connections, library: rawLibrary, 
 }) {
   const library = useMemo(() => filterLibraryForYouTubeVisibility(rawLibrary, hideYouTubeShorts, connections), [rawLibrary, hideYouTubeShorts, connections]);
   const [results, setResults] = useState<Record<string, HomeResult>>({});
-  const [pending, setPending] = useState<string[]>([]), [refresh, setRefresh] = useState(0), [heroIndex, setHeroIndex] = useState(0), [heroPaused,setHeroPaused]=useState(false);
+  const [pending, setPending] = useState<string[]>([]), [refresh, setRefresh] = useState(0);
   const lastRefresh=useRef(refresh);
   const starredChannelsKey=(library.stars||[]).map(s=>`${s.connectionId}:${s.id}`).join(',');
   const connected = signedIn && connections.length > 0;
@@ -45,16 +46,15 @@ export default function Home({ cacheIdentity, connections, library: rawLibrary, 
     ...result, shelves: filterYouTubeShelves(result.shelves, hideYouTubeShorts, connections, rawLibrary.progress),
   }])), [results, hideYouTubeShorts, connections, rawLibrary.progress]);
   const shelves = useMemo(() => bundleIptvHomeShelves(connections.flatMap(c => visibleResults[c.id]?.shelves || []),connections), [connections, visibleResults]);
-  const featured = useMemo(() => connected ? homeFeatures(shelves) : [], [connected, shelves]);
-  useEffect(()=>{if(featured.length<2||heroPaused||query||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;const timer=window.setInterval(()=>{if(document.visibilityState==='visible')setHeroIndex(index=>(index+1)%featured.length);},8000);return()=>window.clearInterval(timer);},[featured.length,heroPaused,query]);
-  const hero = featured[heroIndex % Math.max(1, featured.length)];
+  // The spotlight leaves out titles this profile has watched or is watching.
+  const featured = useMemo(() => { const seen = new Set(rawLibrary.progress.map(p => itemKey(p.item))); return connected ? homeFeatures(shelves, item => seen.has(itemKey(item))) : []; }, [connected, shelves, rawLibrary.progress]);
+  const spotlight = shelves.find(shelf => shelf.featured && shelf.items.some(item => featured.includes(item)));
   const favorites = new Set([...library.favorites,...(library.queue||[])].map(itemKey));
   const progress = new Map(library.progress.map(p => [itemKey(p.item), p.duration ? p.seconds / p.duration * 100 : 0]));
   const continuing = library.progress.filter(p => p.duration > 0 && p.seconds > 5 && p.seconds / p.duration < 0.97).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12);
   const viewAll = (shelf: HomeShelf) => { const c = connections.find(c => c.id === shelf.connectionId); if (c) onBrowse(c, shelf.parent, shelf.kind, shelf.channel, shelf.category); };
   const searchItems = [...new Map([...(connected ? shelves.flatMap(s => s.items) : []), ...library.favorites, ...library.progress.map(p => p.item)].map(i => [itemKey(i), i])).values()]
     .filter(i => `${i.title} ${i.categoryLabel || ''} ${i.source} ${i.subtitle || ''}`.toLowerCase().includes(query.toLowerCase()));
-  const currentHeroIndex = featured.length ? heroIndex % featured.length : 0;
   if (signedIn && (!connectionsReady || (connectionsError && !connections.length))) return <section className="page-section home-loading">
     <span className="eyebrow">Your library</span><h1>Your collection, together</h1>
     {connectionsError ? <div className="home-source-status" role="alert"><div><strong>Your connections could not load</strong><p>{connectionsError}</p></div><button className="button ghost" onClick={() => void onReloadConnections().catch(() => {})}>Try again</button></div> : <Busy label="Loading your connections…" />}
@@ -65,34 +65,8 @@ export default function Home({ cacheIdentity, connections, library: rawLibrary, 
       {pending.length > 0 && <Busy label="Loading your connected libraries…" />}
       {searchItems.length ? <div className="catalog-grid">{searchItems.map(item => <Card key={itemKey(item)} item={item} onOpen={onOpen} onFavorite={onFavorite} saved={favorites.has(itemKey(item))} progress={progress.get(itemKey(item))} />)}</div> : !pending.length && <Empty title="No matches in your home collection">Browse a connected library to search all its titles.</Empty>}
     </section> : <>
-      {hero ? <section className="hero" aria-label="Featured from your libraries"
-        onPointerEnter={() => setHeroPaused(true)} onPointerLeave={() => setHeroPaused(false)}
-        onFocusCapture={() => setHeroPaused(true)} onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget)) setHeroPaused(false); }}
-        style={{ backgroundImage: hero.backdrop || hero.poster ? `url(${hero.backdrop || hero.poster})` : undefined }}>
-        <div className="hero-vignette" />
-        <div className="hero-content">
-          <div className="hero-kicker">Featured from {hero.source}</div>
-          <h1 title={hero.title} className={hero.title.length > 55 ? 'very-long-title' : hero.title.length > 25 ? 'long-title' : ''}>{Array.from(hero.title).length > 90 ? Array.from(hero.title).slice(0, 87).join('').trimEnd() + '…' : hero.title}</h1>
-          <div className="hero-meta">
-            {hero.year && <span>{hero.year}</span>}
-            {!!hero.duration && <span>{Math.round(hero.duration / 60)} min</span>}
-            {hero.type === 'live' && <span className="quality-label">Live</span>}
-            <span>{hero.categoryLabel || hero.subtitle || hero.category?.split(' · ')[0]}</span>
-          </div>
-          <p>{hero.description || (hero.type === 'series' ? 'Explore the episodes in your collection.' : `Ready to watch from ${hero.source}.`)}</p>
-          <div className="hero-actions">
-            <button className="button primary" onClick={() => onOpen(hero)}><Play size={18} fill="currentColor" />{hero.type === 'series' ? 'Play series' : hero.type === 'live' ? 'Watch live' : 'Play now'}</button>
-            <button className="button ghost" onClick={() => onDetails(hero)}><Info size={18} />More info</button>
-          </div>
-        </div>
-        <div className="hero-bottom">
-          <button className="text-button hero-save" onClick={() => onFavorite(hero)} aria-label={favorites.has(itemKey(hero)) ? 'Remove featured title from My list' : 'Add featured title to My list'}>{favorites.has(itemKey(hero)) ? <Check size={18} /> : <Plus size={18} />}{favorites.has(itemKey(hero)) ? 'In My list' : 'Add to My list'}</button>
-          <div className="hero-pages">
-            <span>{currentHeroIndex + 1}<small> / {featured.length}</small></span>
-            <div>{featured.map((item, index) => <button key={itemKey(item)} className={currentHeroIndex === index ? 'selected' : ''} aria-label={`Feature ${item.title}`} aria-pressed={currentHeroIndex === index} onClick={() => setHeroIndex(index)}><span /></button>)}</div>
-          </div>
-        </div>
-      </section> : <section className="page-section home-loading">
+      {featured.length ? <HeroCarousel items={featured} saved={item => favorites.has(itemKey(item))} onOpen={onOpen} onDetails={onDetails} onFavorite={onFavorite}
+        kicker={item => spotlight?.items.includes(item) ? spotlight.title : `Featured from ${item.source}`} /> : <section className="page-section home-loading">
         <span className="eyebrow">Your collection, together</span>
         <h1>{connections.length ? 'Your library' : 'Your libraries. One screen.'}</h1>
         {pending.length ? <Busy label="Loading your collection…" /> : <p>{connections.length ? 'No featured titles yet. Browse a connection below.' : canManage ? 'Bring your films, shows and channels into TesPlay. Start with a library below.' : 'Your server owner can share connections with your account.'}</p>}

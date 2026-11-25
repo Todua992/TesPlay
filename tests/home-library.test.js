@@ -163,5 +163,22 @@ test('Home preview survives a reload, isolates identities and invalidates change
   assert.equal(readHomePreview('owner:profile',c,[{connectionId:c.id,id:'live:1',kind:'category'}],storage),undefined);
   writeHomePreview('owner:profile',c,[],{shelves:[],issues:['524']},storage);
   assert.deepEqual(readHomePreview('owner:profile',c,[],storage),result);
-  values.set('tesplay:home:v2:owner:profile','invalid JSON');assert.equal(readHomePreview('owner:profile',c,[],storage),undefined);
+  values.set('tesplay:home:v3:owner:profile','invalid JSON');assert.equal(readHomePreview('owner:profile',c,[],storage),undefined);
+});
+
+test("Home's spotlight shows MovieBox Pro's Today's Hot Movies, even beyond the first rows, without watched titles", async () => {
+  const { hotMoviesRow } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const row = (title, ...ids) => ({ id: title, title, items: ids.map(id => item(id, 'movie', 'moviebox')) });
+  const rows = [row('Continue Watching', 'seen'), row('Latest Movies', 'a'), row('Hot TV Shows', 'b'), row('Top Rated', 'c'), row('Anime', 'd'), row("Today's Hot Movies", 'hot1', 'seen', 'hot2')];
+  assert.equal(hotMoviesRow(rows).title, "Today's Hot Movies");
+  assert.equal(hotMoviesRow([row('Trending Movies'), row('Hot TV Shows')]).title, 'Trending Movies');
+  assert.equal(hotMoviesRow([row('Latest'), row('Hot TV Shows')]), undefined, 'A TV row is not a movie spotlight');
+  const result = await loadHomeConnection(connection('moviebox'), async () => ({ items: [], shelves: rows }), new AbortController().signal);
+  assert.deepEqual(result.shelves.map(s => [s.title, !!s.featured, !!s.personal]), [
+    ['Continue Watching', false, true], ['Latest Movies', false, false], ['Hot TV Shows', false, false], ['Top Rated', false, false], ["Today's Hot Movies", true, false],
+  ]);
+  const watched = i => i.id === 'seen';
+  assert.deepEqual(homeFeatures(result.shelves, watched).map(i => i.id), ['hot1', 'hot2']);
+  const plain = result.shelves.map(s => ({ ...s, featured: false }));
+  assert.deepEqual(homeFeatures(plain, watched).map(i => i.id), ['a', 'b', 'c', 'hot1', 'hot2'], 'Without a hot row: no personal rows, no watched titles');
 });
